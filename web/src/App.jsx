@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import {
+  Activity,
   AlertCircle,
+  AlertTriangle,
   Banknote,
   Box,
   CheckCircle2,
@@ -8,13 +10,16 @@ import {
   Coins,
   Cpu,
   Database,
+  MapPin,
   PackageCheck,
   Plus,
+  Power,
   RefreshCw,
   Save,
   Send,
   Settings,
   ShoppingCart,
+  TrendingUp,
   Wifi,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -45,15 +50,50 @@ function time(value) {
   }).format(new Date(value));
 }
 
-function statusTone(machine) {
+function startOfToday() {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function isToday(value) {
+  if (!value) return false;
+  return new Date(value) >= startOfToday();
+}
+
+function ageText(value) {
+  if (!value) return "Chưa có tín hiệu";
+  const diffSeconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  if (diffSeconds < 60) return `${diffSeconds}s trước`;
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) return `${diffMinutes} phút trước`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  return `${diffHours} giờ trước`;
+}
+
+function machineTone(machine) {
   if (!machine?.last_seen_at) return "warning";
   const ageMs = Date.now() - new Date(machine.last_seen_at).getTime();
-  if (ageMs < 45000 && machine.status !== "error") return "success";
   if (machine.status === "error") return "danger";
+  if (ageMs < 45000 && machine.status !== "offline") return "success";
   return "warning";
 }
 
-function Stat({ icon: Icon, label, value, tone = "neutral" }) {
+function machineStatusLabel(machine) {
+  const tone = machineTone(machine);
+  if (tone === "success") return "Online";
+  if (machine?.status === "error") return "Lỗi";
+  return "Mất kết nối";
+}
+
+function productTone(product) {
+  if (!product.enabled) return "neutral";
+  if (Number(product.stock) <= 0) return "danger";
+  if (Number(product.stock) <= 1) return "warning";
+  return "success";
+}
+
+function Stat({ icon: Icon, label, value, tone = "neutral", hint }) {
   return (
     <section className={`stat stat-${tone}`}>
       <div className="stat-icon">
@@ -62,6 +102,7 @@ function Stat({ icon: Icon, label, value, tone = "neutral" }) {
       <div>
         <p>{label}</p>
         <strong>{value}</strong>
+        {hint && <small>{hint}</small>}
       </div>
     </section>
   );
@@ -79,7 +120,7 @@ export default function App() {
   const [moneyEvents, setMoneyEvents] = useState([]);
   const [commands, setCommands] = useState([]);
   const [events, setEvents] = useState([]);
-  const [activeTab, setActiveTab] = useState("products");
+  const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState("");
   const [error, setError] = useState("");
@@ -87,20 +128,74 @@ export default function App() {
   const [newMachineId, setNewMachineId] = useState("vending-002");
 
   const currentMachine = machines.find((item) => item.id === machineId);
-  const onlineTone = statusTone(currentMachine);
+  const onlineTone = machineTone(currentMachine);
 
-  const totals = useMemo(() => {
-    const revenue = sales
-      .filter((sale) => sale.success)
-      .reduce((sum, sale) => sum + Number(sale.unit_price || 0), 0);
-    const inserted = moneyEvents.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const dashboard = useMemo(() => {
+    const successfulSales = sales.filter((sale) => sale.success);
+    const todaySales = successfulSales.filter((sale) => isToday(sale.created_at));
+    const todayMoney = moneyEvents.filter((item) => isToday(item.created_at));
+    const revenueToday = todaySales.reduce((sum, sale) => sum + Number(sale.unit_price || 0), 0);
+    const insertedToday = todayMoney.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const lowStockProducts = products.filter((item) => item.enabled && Number(item.stock) <= 1);
+    const disabledProducts = products.filter((item) => !item.enabled);
+    const pendingCommands = commands.filter((item) => item.status === "pending" || item.status === "sent");
+    const failedCommands = commands.filter((item) => item.status === "error");
+
+    const slotSales = new Map();
+    for (const sale of todaySales) {
+      const slot = Number(sale.product_slot || 0);
+      if (!slot) continue;
+      const current = slotSales.get(slot) || { slot, count: 0, revenue: 0 };
+      current.count += 1;
+      current.revenue += Number(sale.unit_price || 0);
+      slotSales.set(slot, current);
+    }
+
+    const topProduct = [...slotSales.values()].sort((a, b) => b.count - a.count)[0];
+    const totalStock = products.reduce((sum, item) => sum + Number(item.stock || 0), 0);
+
+    const alerts = [];
+    if (onlineTone !== "success") {
+      alerts.push({
+        tone: "danger",
+        title: "Máy không còn online",
+        text: `Tín hiệu cuối: ${ageText(currentMachine?.last_seen_at)}.`,
+      });
+    }
+    for (const item of lowStockProducts) {
+      alerts.push({
+        tone: Number(item.stock) <= 0 ? "danger" : "warning",
+        title: `SP${item.slot} ${Number(item.stock) <= 0 ? "hết hàng" : "sắp hết"}`,
+        text: `${item.name || "Sản phẩm"} còn ${Number(item.stock || 0)}/${Number(item.capacity || 0)}.`,
+      });
+    }
+    if (pendingCommands.length) {
+      alerts.push({
+        tone: "warning",
+        title: "Có lệnh đang chờ ESP32 xử lý",
+        text: `${pendingCommands.length} lệnh pending/sent.`,
+      });
+    }
+    if (failedCommands.length) {
+      alerts.push({
+        tone: "danger",
+        title: "Có lệnh cấu hình lỗi",
+        text: `${failedCommands.length} lệnh bị lỗi, cần xem tab Lệnh.`,
+      });
+    }
+
     return {
-      revenue,
-      inserted,
-      sold: sales.filter((sale) => sale.success).length,
-      lowStock: products.filter((item) => item.enabled && Number(item.stock) <= 1).length,
+      alerts,
+      disabledProducts,
+      insertedToday,
+      lowStockProducts,
+      pendingCommands,
+      revenueToday,
+      soldToday: todaySales.length,
+      topProduct,
+      totalStock,
     };
-  }, [moneyEvents, products, sales]);
+  }, [commands, currentMachine, moneyEvents, onlineTone, products, sales]);
 
   const loadData = useCallback(async () => {
     if (!supabase) return;
@@ -142,25 +237,25 @@ export default function App() {
           .select("*")
           .eq("machine_id", selectedId)
           .order("created_at", { ascending: false })
-          .limit(30),
+          .limit(150),
         supabase
           .from("money_events")
           .select("*")
           .eq("machine_id", selectedId)
           .order("created_at", { ascending: false })
-          .limit(30),
+          .limit(150),
         supabase
           .from("machine_commands")
           .select("*")
           .eq("machine_id", selectedId)
           .order("created_at", { ascending: false })
-          .limit(30),
+          .limit(80),
         supabase
           .from("machine_events")
           .select("*")
           .eq("machine_id", selectedId)
           .order("created_at", { ascending: false })
-          .limit(30),
+          .limit(80),
       ]);
 
     const firstError =
@@ -262,7 +357,7 @@ export default function App() {
 
     const payload = {
       slot: product.slot,
-      name: product.name || `San pham ${product.slot}`,
+      name: product.name || `Sản phẩm ${product.slot}`,
       price,
       stock,
       capacity,
@@ -299,7 +394,7 @@ export default function App() {
       for (const product of products) {
         const payload = {
           slot: Number(product.slot),
-          name: product.name || `San pham ${product.slot}`,
+          name: product.name || `Sản phẩm ${product.slot}`,
           price: Number(product.price),
           stock: Number(product.stock),
           capacity: Number(product.capacity),
@@ -318,7 +413,7 @@ export default function App() {
       await createCommand("sync_products", {
         products: products.map((item) => ({
           slot: Number(item.slot),
-          name: item.name || `San pham ${item.slot}`,
+          name: item.name || `Sản phẩm ${item.slot}`,
           price: Number(item.price),
           stock: Number(item.stock),
           capacity: Number(item.capacity),
@@ -359,8 +454,8 @@ export default function App() {
 
     const { error: machineError } = await supabase.from("machines").upsert({
       id,
-      name: `May ban hang ${id}`,
-      location: "Chua dat vi tri",
+      name: `Máy bán hàng ${id}`,
+      location: "Chưa đặt vị trí",
       status: "offline",
       firmware_version: "cloud-0.1",
     });
@@ -374,7 +469,7 @@ export default function App() {
     const seedProducts = [1, 2, 3, 4].map((slot) => ({
       machine_id: id,
       slot,
-      name: `San pham ${slot}`,
+      name: `Sản phẩm ${slot}`,
       price: 10000,
       stock: 4,
       capacity: 4,
@@ -403,7 +498,7 @@ export default function App() {
           <AlertCircle size={28} />
           <div>
             <h1>Vending Cloud</h1>
-            <p>Missing Supabase environment variables.</p>
+            <p>Thiếu biến môi trường Supabase.</p>
             <code>VITE_SUPABASE_URL</code>
             <code>VITE_SUPABASE_ANON_KEY</code>
           </div>
@@ -421,13 +516,13 @@ export default function App() {
         </div>
         <div className={`connection connection-${onlineTone}`}>
           {onlineTone === "success" ? <Wifi size={17} /> : <AlertCircle size={17} />}
-          <span>{onlineTone === "success" ? "Online" : "Cần kiểm tra"}</span>
+          <span>{machineStatusLabel(currentMachine)}</span>
         </div>
       </header>
 
       <section className="toolbar">
         <label>
-          Máy
+          Máy đang xem
           <select value={machineId} onChange={(event) => setMachineId(event.target.value)}>
             {machines.map((machine) => (
               <option key={machine.id} value={machine.id}>
@@ -472,14 +567,25 @@ export default function App() {
       )}
 
       <section className="stats-grid">
-        <Stat icon={ShoppingCart} label="Sản phẩm đã bán" value={totals.sold} tone="success" />
-        <Stat icon={Coins} label="Doanh thu phiên" value={money(totals.revenue)} tone="money" />
-        <Stat icon={Banknote} label="Tiền đã nhận" value={money(totals.inserted)} tone="money" />
-        <Stat icon={Clock3} label="Lần cập nhật" value={time(currentMachine?.last_seen_at)} tone={onlineTone} />
-        <Stat icon={Database} label="Tiền trong máy" value={money(currentMachine?.cash_in_box)} tone="neutral" />
-        <Stat icon={PackageCheck} label="Sản phẩm sắp hết" value={totals.lowStock} tone={totals.lowStock ? "warning" : "success"} />
+        <Stat icon={ShoppingCart} label="Đã bán hôm nay" value={dashboard.soldToday} tone="success" />
+        <Stat icon={Coins} label="Doanh thu hôm nay" value={money(dashboard.revenueToday)} tone="money" />
+        <Stat icon={Banknote} label="Tiền nhận hôm nay" value={money(dashboard.insertedToday)} tone="money" />
+        <Stat
+          icon={Clock3}
+          label="Tín hiệu cuối"
+          value={ageText(currentMachine?.last_seen_at)}
+          hint={time(currentMachine?.last_seen_at)}
+          tone={onlineTone}
+        />
+        <Stat icon={Database} label="Tiền trong hộp" value={money(currentMachine?.cash_in_box)} tone="neutral" />
+        <Stat
+          icon={PackageCheck}
+          label="Cần nạp hàng"
+          value={dashboard.lowStockProducts.length}
+          tone={dashboard.lowStockProducts.length ? "warning" : "success"}
+        />
         <Stat icon={Cpu} label="Firmware" value={currentMachine?.firmware_version || "-"} tone="neutral" />
-        <Stat icon={Box} label="Số slot" value={products.length} tone="neutral" />
+        <Stat icon={Box} label="Tổng tồn kho" value={dashboard.totalStock} tone="neutral" />
       </section>
 
       <section className="actions">
@@ -502,6 +608,9 @@ export default function App() {
       </section>
 
       <section className="tabs" role="tablist">
+        <button className={activeTab === "overview" ? "active" : ""} onClick={() => setActiveTab("overview")}>
+          Tổng quan
+        </button>
         <button className={activeTab === "products" ? "active" : ""} onClick={() => setActiveTab("products")}>
           Sản phẩm
         </button>
@@ -519,6 +628,19 @@ export default function App() {
         </button>
       </section>
 
+      {activeTab === "overview" && (
+        <Overview
+          alerts={dashboard.alerts}
+          currentMachine={currentMachine}
+          disabledProducts={dashboard.disabledProducts}
+          machines={machines}
+          machineId={machineId}
+          onSelectMachine={setMachineId}
+          products={products}
+          topProduct={dashboard.topProduct}
+        />
+      )}
+
       {activeTab === "products" && (
         <section className="panel">
           <div className="panel-heading">
@@ -527,7 +649,7 @@ export default function App() {
           </div>
           <div className="product-grid">
             {products.map((product) => (
-              <article key={product.id} className="product-row">
+              <article key={product.id} className={`product-row product-row-${productTone(product)}`}>
                 <div className="slot-badge">SP{product.slot}</div>
                 <label>
                   Tên
@@ -645,6 +767,141 @@ export default function App() {
   );
 }
 
+function Overview({ alerts, currentMachine, disabledProducts, machines, machineId, onSelectMachine, products, topProduct }) {
+  return (
+    <section className="overview-grid">
+      <section className="panel">
+        <div className="panel-heading">
+          <h2>Cần chú ý</h2>
+          <span>{alerts.length || "Ổn định"}</span>
+        </div>
+        <div className="alert-list">
+          {alerts.map((alert) => (
+            <article key={`${alert.title}-${alert.text}`} className={`alert-card alert-card-${alert.tone}`}>
+              <div>
+                {alert.tone === "danger" ? <AlertTriangle size={18} /> : <AlertCircle size={18} />}
+              </div>
+              <div>
+                <strong>{alert.title}</strong>
+                <p>{alert.text}</p>
+              </div>
+            </article>
+          ))}
+          {!alerts.length && (
+            <article className="empty-state">
+              <CheckCircle2 size={22} />
+              <div>
+                <strong>Không có cảnh báo</strong>
+                <p>Máy đang online và tồn kho vẫn an toàn.</p>
+              </div>
+            </article>
+          )}
+        </div>
+      </section>
+
+      <section className="panel machine-panel">
+        <div className="panel-heading">
+          <h2>Máy bán hàng</h2>
+          <span>{machines.length} máy</span>
+        </div>
+        <div className="machine-list">
+          {machines.map((machine) => {
+            const tone = machineTone(machine);
+            return (
+              <button
+                key={machine.id}
+                className={`machine-card ${machine.id === machineId ? "active" : ""}`}
+                onClick={() => onSelectMachine(machine.id)}
+              >
+                <span className={`status-dot status-dot-${tone}`} />
+                <span>
+                  <strong>{machine.name}</strong>
+                  <small>{machine.id}</small>
+                </span>
+                <Pill tone={tone}>{machineStatusLabel(machine)}</Pill>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-heading">
+          <h2>Tình trạng máy</h2>
+          <span>{currentMachine?.id || "-"}</span>
+        </div>
+        <div className="detail-list">
+          <Detail icon={Power} label="Trạng thái" value={machineStatusLabel(currentMachine)} />
+          <Detail icon={Clock3} label="Tín hiệu cuối" value={ageText(currentMachine?.last_seen_at)} />
+          <Detail icon={MapPin} label="Vị trí" value={currentMachine?.location || "Chưa đặt"} />
+          <Detail icon={TrendingUp} label="Tổng doanh thu" value={money(currentMachine?.total_revenue)} />
+          <Detail icon={Activity} label="Tổng sản phẩm đã bán" value={currentMachine?.total_sales || 0} />
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-heading">
+          <h2>Tồn kho theo slot</h2>
+          <span>{disabledProducts.length} slot tắt</span>
+        </div>
+        <div className="stock-list">
+          {products.map((product) => {
+            const capacity = Math.max(1, Number(product.capacity || 0));
+            const stock = Number(product.stock || 0);
+            const percent = Math.max(0, Math.min(100, (stock / capacity) * 100));
+            return (
+              <article key={product.id} className="stock-row">
+                <div>
+                  <strong>SP{product.slot}</strong>
+                  <small>{product.name}</small>
+                </div>
+                <div className="stock-meter">
+                  <span style={{ width: `${percent}%` }} />
+                </div>
+                <Pill tone={productTone(product)}>{product.enabled ? `${stock}/${capacity}` : "Tắt"}</Pill>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="panel insight-panel">
+        <div className="panel-heading">
+          <h2>Gợi ý vận hành</h2>
+          <span>Hôm nay</span>
+        </div>
+        <div className="insight-list">
+          <Detail
+            icon={ShoppingCart}
+            label="Sản phẩm bán chạy"
+            value={topProduct ? `SP${topProduct.slot} - ${topProduct.count} lượt` : "Chưa có bán hàng hôm nay"}
+          />
+          <Detail
+            icon={PackageCheck}
+            label="Việc cần làm"
+            value={alerts.length ? "Xử lý cảnh báo trước khi chỉnh cấu hình" : "Có thể tiếp tục vận hành"}
+          />
+          <Detail
+            icon={Wifi}
+            label="Cloud"
+            value={machineTone(currentMachine) === "success" ? "Heartbeat đang ổn" : "Cần kiểm tra ESP32/WiFi"}
+          />
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function Detail({ icon: Icon, label, value }) {
+  return (
+    <div className="detail-row">
+      <Icon size={17} />
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
 function DataTable({ title, rows, columns }) {
   return (
     <section className="panel">
@@ -682,4 +939,3 @@ function DataTable({ title, rows, columns }) {
     </section>
   );
 }
-
