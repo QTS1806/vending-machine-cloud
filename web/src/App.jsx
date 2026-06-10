@@ -3,28 +3,20 @@ import {
   AlertCircle,
   AlertTriangle,
   Banknote,
-  Bell,
   Box,
   CheckCircle2,
-  ChevronRight,
   Coins,
   CreditCard,
   Database,
   LayoutDashboard,
   ListChecks,
-  Menu,
   Plus,
   RefreshCw,
   Save,
-  Search,
-  Send,
   Settings,
   ShoppingCart,
-  SlidersHorizontal,
   Trash2,
   TrendingUp,
-  Wifi,
-  WifiOff,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -100,6 +92,16 @@ function productTone(product) {
 function percent(stock, capacity) {
   const max = Math.max(1, Number(capacity || 0));
   return Math.max(0, Math.min(100, (Number(stock || 0) / max) * 100));
+}
+
+function machineNumber(id) {
+  const match = String(id || "").match(/(\d+)$/);
+  return match ? match[1].padStart(3, "0") : String(id || "-");
+}
+
+function displayMachineName(machineOrId) {
+  const id = typeof machineOrId === "string" ? machineOrId : machineOrId?.id;
+  return `Máy bán hàng ${machineNumber(id)}`;
 }
 
 function Pill({ tone, children }) {
@@ -488,7 +490,7 @@ export default function App() {
 
     const { error: machineError } = await supabase.from("machines").upsert({
       id,
-      name: `Máy bán hàng ${id}`,
+      name: displayMachineName(id),
       location: "Chưa đặt vị trí",
       status: "offline",
       firmware_version: "cloud-0.1",
@@ -534,7 +536,7 @@ export default function App() {
     }
 
     const ok = window.confirm(
-      `Xóa máy ${currentMachine.name || machineId}? Toàn bộ sản phẩm, lịch sử bán, tiền, lệnh và sự kiện của máy này cũng sẽ bị xóa.`,
+      `Xóa ${displayMachineName(currentMachine)}? Toàn bộ sản phẩm, lịch sử bán, tiền, lệnh và sự kiện của máy này cũng sẽ bị xóa.`,
     );
     if (!ok) return;
 
@@ -569,7 +571,7 @@ export default function App() {
         <section className="config-panel">
           <AlertCircle size={28} />
           <div>
-            <h1>VendoPro</h1>
+            <h1>Nhóm 1</h1>
             <p>Thiếu biến môi trường Supabase.</p>
             <code>VITE_SUPABASE_URL</code>
             <code>VITE_SUPABASE_ANON_KEY</code>
@@ -585,25 +587,14 @@ export default function App() {
 
       <section className="workspace">
         <header className="app-topbar">
-          <button className="ghost-button" type="button" aria-label="Mở menu">
-            <Menu size={20} />
-          </button>
-          <div className="search-box">
-            <Search size={18} />
-            <input placeholder="Tìm kiếm máy, sản phẩm, lệnh..." spellCheck="false" />
-          </div>
           <button className="filter-button" type="button" onClick={loadData} disabled={loading}>
-            <SlidersHorizontal size={18} />
+            <RefreshCw size={18} className={loading ? "spin" : ""} />
             <span>{loading ? "Đang tải" : "Làm mới"}</span>
           </button>
-          <div className="top-alert">
-            <Bell size={19} />
-            {dashboard.alerts.length > 0 && <span>{dashboard.alerts.length}</span>}
-          </div>
           <div className="admin-chip">
-            <div>Q</div>
+            <div>N1</div>
             <span>
-              <strong>Admin</strong>
+              <strong>Nhóm 1</strong>
               <small>Quản trị viên</small>
             </span>
           </div>
@@ -612,9 +603,6 @@ export default function App() {
         <section className="content">
           <PageHeader
             activeTab={activeTab}
-            onlineTone={onlineTone}
-            currentMachine={currentMachine}
-            loadData={loadData}
           />
 
           {error && (
@@ -637,12 +625,8 @@ export default function App() {
               machines={machines}
               products={products}
               sales={sales}
-              currentMachine={currentMachine}
               machineId={machineId}
               setMachineId={setMachineId}
-              sendAllProducts={sendAllProducts}
-              sendSimpleCommand={sendSimpleCommand}
-              saving={saving}
             />
           )}
 
@@ -729,7 +713,7 @@ function Sidebar({ activeTab, setActiveTab }) {
           <Database size={26} />
         </div>
         <div>
-          <strong>VendoPro</strong>
+          <strong>Nhóm 1</strong>
           <span>Vending Management</span>
         </div>
       </div>
@@ -742,18 +726,13 @@ function Sidebar({ activeTab, setActiveTab }) {
           </button>
         ))}
       </nav>
-
-      <div className="sidebar-footer">
-        <strong>Gói thử nghiệm</strong>
-        <span>Supabase + ESP32</span>
-      </div>
     </aside>
   );
 }
 
-function PageHeader({ activeTab, currentMachine, onlineTone }) {
+function PageHeader({ activeTab }) {
   const titles = {
-    overview: ["Quản lý máy bán hàng tự động", "Theo dõi trạng thái, tồn kho và doanh thu theo thời gian thực"],
+    overview: ["Hệ thống quản lý máy bán hàng tự động", "Theo dõi trạng thái, tồn kho và doanh thu theo thời gian thực"],
     machines: ["Máy bán hàng", "Thêm, chọn và xóa các máy đang quản lý"],
     products: ["Tồn kho sản phẩm", "Cập nhật giá, số lượng và trạng thái từng slot"],
     sales: ["Lịch sử bán hàng", "Theo dõi các giao dịch bán thành công từ ESP32"],
@@ -769,31 +748,25 @@ function PageHeader({ activeTab, currentMachine, onlineTone }) {
         <h1>{title}</h1>
         <p>{subtitle}</p>
       </div>
-      <div className={`machine-status machine-status-${onlineTone}`}>
-        {onlineTone === "success" ? <Wifi size={18} /> : <WifiOff size={18} />}
-        <span>{currentMachine?.id || "Chưa có máy"}</span>
-      </div>
     </section>
   );
 }
 
-function OverviewPage({ dashboard, machines, products, sales, currentMachine, machineId, setMachineId, sendAllProducts, sendSimpleCommand, saving }) {
+function OverviewPage({ dashboard, machines, products, sales, machineId, setMachineId }) {
   return (
     <>
       <section className="metric-grid">
         <MetricCard icon={Database} label="Tổng số máy" value={machines.length} hint={`${dashboard.onlineMachines.length} máy đang hoạt động`} tone="blue" />
         <MetricCard icon={CheckCircle2} label="Máy đang hoạt động" value={dashboard.onlineMachines.length} hint={`${machines.length ? Math.round((dashboard.onlineMachines.length / machines.length) * 100) : 0}% tổng số máy`} tone="green" />
         <MetricCard icon={TrendingUp} label="Doanh thu hôm nay" value={money(dashboard.revenueToday)} hint={`${dashboard.soldToday} sản phẩm đã bán`} tone="teal" />
-        <MetricCard icon={AlertTriangle} label="Cảnh báo tồn kho" value={dashboard.lowStockProducts.length} hint="Slot sắp hết hoặc hết hàng" tone="orange" />
+        <MetricCard icon={AlertTriangle} label="Cảnh báo tồn kho" value={dashboard.lowStockProducts.length} hint="Sản phẩm hết hàng" tone="orange" />
       </section>
 
       <section className="dashboard-grid">
         <section className="panel machine-table-panel">
           <div className="panel-heading">
             <h2>Danh sách máy bán hàng</h2>
-            <button className="mini-button" onClick={() => setMachineId(machineId)}>
-              Xem tất cả <ChevronRight size={16} />
-            </button>
+            <span>{machines.length} máy</span>
           </div>
           <MachineTable machines={machines} selectedId={machineId} onSelect={setMachineId} />
         </section>
@@ -805,8 +778,8 @@ function OverviewPage({ dashboard, machines, products, sales, currentMachine, ma
 
         <section className="panel chart-panel">
           <div className="panel-heading">
-            <h2>Doanh thu gần đây</h2>
-            <span>30 giao dịch mới nhất</span>
+            <h2>Doanh thu 7 ngày</h2>
+            <span>7 ngày qua</span>
           </div>
           <RevenueBars sales={sales} />
         </section>
@@ -817,23 +790,6 @@ function OverviewPage({ dashboard, machines, products, sales, currentMachine, ma
             <span>{dashboard.totalStock} sản phẩm</span>
           </div>
           <StockList products={products} />
-        </section>
-
-        <section className="panel quick-panel">
-          <div className="panel-heading">
-            <h2>Thao tác nhanh</h2>
-            <span>{currentMachine?.id || "-"}</span>
-          </div>
-          <div className="quick-actions">
-            <button className="primary-button" onClick={sendAllProducts} disabled={!products.length || saving === "all-products"}>
-              <Send size={18} />
-              <span>{saving === "all-products" ? "Đang gửi" : "Gửi cấu hình"}</span>
-            </button>
-            <button className="icon-button" onClick={() => sendSimpleCommand("refresh_config")} disabled={saving === "refresh_config"}>
-              <RefreshCw size={18} />
-              <span>Đồng bộ lại</span>
-            </button>
-          </div>
         </section>
       </section>
     </>
@@ -855,7 +811,7 @@ function MachineTable({ machines, selectedId, onSelect }) {
         return (
           <button key={machine.id} className={`machine-row ${machine.id === selectedId ? "active" : ""}`} onClick={() => onSelect(machine.id)}>
             <span>
-              <strong>{machine.name}</strong>
+              <strong>{displayMachineName(machine)}</strong>
               <small>{machine.id}</small>
             </span>
             <Pill tone={tone}>{machineStatusLabel(machine)}</Pill>
@@ -927,21 +883,48 @@ function ActivityPanel({ activity }) {
 }
 
 function RevenueBars({ sales }) {
-  const recent = sales.slice(0, 7).reverse();
-  const max = Math.max(1, ...recent.map((sale) => Number(sale.unit_price || 0)));
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (6 - index));
+    date.setHours(0, 0, 0, 0);
+    const key = date.toISOString().slice(0, 10);
+    return {
+      key,
+      label: new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit" }).format(date),
+      revenue: 0,
+    };
+  });
+
+  const dayMap = new Map(days.map((day) => [day.key, day]));
+  for (const sale of sales) {
+    if (!sale.success || !sale.created_at) continue;
+    const key = new Date(sale.created_at).toISOString().slice(0, 10);
+    const day = dayMap.get(key);
+    if (day) {
+      day.revenue += Number(sale.unit_price || 0);
+    }
+  }
+
+  const max = Math.max(1, ...days.map((day) => day.revenue));
 
   return (
-    <div className="bars">
-      {recent.map((sale, index) => {
-        const height = Math.max(18, (Number(sale.unit_price || 0) / max) * 100);
-        return (
-          <div key={sale.id || index} className="bar-item">
-            <span style={{ height: `${height}%` }} />
-            <small>SP{sale.product_slot}</small>
-          </div>
-        );
-      })}
-      {!recent.length && <div className="empty compact">Chưa có dữ liệu bán hàng</div>}
+    <div className="revenue-chart">
+      <div className="chart-legend">
+        <span className="legend-bar" />
+        <span>Doanh thu</span>
+      </div>
+      <div className="bars">
+        {days.map((day) => {
+          const height = day.revenue > 0 ? Math.max(18, (day.revenue / max) * 100) : 4;
+          return (
+            <div key={day.key} className="bar-item">
+              <strong>{day.revenue ? money(day.revenue) : ""}</strong>
+              <span style={{ height: `${height}%` }} />
+              <small>{day.label}</small>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

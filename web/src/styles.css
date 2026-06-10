@@ -144,7 +144,7 @@ button:disabled {
 
 .app-topbar {
   display: grid;
-  grid-template-columns: 42px minmax(220px, 560px) auto 44px auto;
+  grid-template-columns: 1fr auto;
   align-items: center;
   gap: 18px;
   min-height: 78px;
@@ -153,7 +153,6 @@ button:disabled {
   padding: 0 28px;
 }
 
-.ghost-button,
 .filter-button,
 .icon-button,
 .primary-button,
@@ -168,12 +167,6 @@ button:disabled {
   white-space: nowrap;
 }
 
-.ghost-button {
-  border: 0;
-  background: transparent;
-  color: #344054;
-}
-
 .filter-button,
 .icon-button,
 .mini-button {
@@ -185,7 +178,7 @@ button:disabled {
 
 .filter-button {
   justify-self: end;
-  min-width: 148px;
+  min-width: 132px;
 }
 
 .primary-button {
@@ -197,50 +190,6 @@ button:disabled {
 
 .danger-action {
   color: #d92d20;
-}
-
-.search-box {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  border: 1px solid #d7dee9;
-  border-radius: 10px;
-  background: #ffffff;
-  padding: 0 14px;
-  color: #667085;
-}
-
-.search-box input {
-  width: 100%;
-  min-height: 42px;
-  border: 0;
-  outline: 0;
-  color: #111827;
-}
-
-.top-alert {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  color: #344054;
-}
-
-.top-alert span {
-  position: absolute;
-  top: 1px;
-  right: 1px;
-  display: grid;
-  place-items: center;
-  min-width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  background: #ef4444;
-  color: #ffffff;
-  font-size: 0.74rem;
-  font-weight: 950;
 }
 
 .admin-chip {
@@ -448,8 +397,7 @@ h2 {
   min-height: 280px;
 }
 
-.stock-panel,
-.quick-panel {
+.stock-panel {
   min-height: 280px;
 }
 
@@ -474,11 +422,6 @@ h2 {
   color: #667085;
   font-size: 0.84rem;
   font-weight: 850;
-}
-
-.mini-button {
-  min-height: 34px;
-  color: #0b6ee8;
 }
 
 .machine-table {
@@ -639,14 +582,35 @@ h2 {
 .bars {
   display: flex;
   align-items: end;
-  gap: 18px;
-  height: 210px;
-  padding: 18px 22px 16px;
+  gap: 16px;
+  height: 220px;
+  padding: 12px 22px 18px;
+}
+
+.revenue-chart {
+  padding-top: 8px;
+}
+
+.chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 22px;
+  color: #475467;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.legend-bar {
+  width: 18px;
+  height: 10px;
+  border-radius: 999px;
+  background: #70b7ff;
 }
 
 .bar-item {
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: 28px 1fr auto;
   justify-items: center;
   gap: 8px;
   height: 100%;
@@ -654,6 +618,13 @@ h2 {
   color: #667085;
   font-size: 0.78rem;
   font-weight: 850;
+}
+
+.bar-item strong {
+  color: #344054;
+  font-size: 0.72rem;
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .bar-item span {
@@ -923,6 +894,16 @@ code {
   color: #111827;
 }
 
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 1180px) {
   .app-frame {
     grid-template-columns: 86px minmax(0, 1fr);
@@ -986,15 +967,17 @@ code {
   }
 
   .app-topbar {
-    grid-template-columns: 42px 1fr;
+    grid-template-columns: 1fr;
     gap: 10px;
     padding: 12px;
   }
 
-  .filter-button,
-  .top-alert,
   .admin-chip {
     display: none;
+  }
+
+  .filter-button {
+    width: 100%;
   }
 
   .content {
