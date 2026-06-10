@@ -89,6 +89,13 @@ function productTone(product) {
   return "success";
 }
 
+function productStatusLabel(product) {
+  if (!product.enabled) return "Đang tắt";
+  if (Number(product.stock) <= 0) return "Hết hàng";
+  if (Number(product.stock) <= 1) return "Sắp hết";
+  return "Còn hàng";
+}
+
 function percent(stock, capacity) {
   const max = Math.max(1, Number(capacity || 0));
   return Math.max(0, Math.min(100, (Number(stock || 0) / max) * 100));
@@ -354,6 +361,17 @@ export default function App() {
     };
   }, [machineId, loadData]);
 
+  useEffect(() => {
+    if (!notice && !error) return undefined;
+
+    const timer = window.setTimeout(() => {
+      setNotice("");
+      setError("");
+    }, 5200);
+
+    return () => window.clearTimeout(timer);
+  }, [error, notice]);
+
   const updateProductField = (slot, field, value) => {
     setProducts((current) =>
       current.map((item) => (item.slot === slot ? { ...item, [field]: value } : item)),
@@ -591,13 +609,6 @@ export default function App() {
             <RefreshCw size={18} className={loading ? "spin" : ""} />
             <span>{loading ? "Đang tải" : "Làm mới"}</span>
           </button>
-          <div className="admin-chip">
-            <div>N1</div>
-            <span>
-              <strong>Nhóm 1</strong>
-              <small>Quản trị viên</small>
-            </span>
-          </div>
         </header>
 
         <section className="content">
@@ -646,7 +657,11 @@ export default function App() {
 
           {activeTab === "products" && (
             <ProductsPage
+              currentMachine={currentMachine}
+              machineId={machineId}
+              machines={machines}
               products={products}
+              setMachineId={setMachineId}
               updateProductField={updateProductField}
               saveProduct={saveProduct}
               saving={saving}
@@ -987,44 +1002,89 @@ function MachinesPage({ machines, machineId, setMachineId, newMachineId, setNewM
   );
 }
 
-function ProductsPage({ products, updateProductField, saveProduct, saving }) {
+function ProductsPage({ currentMachine, machineId, machines, products, setMachineId, updateProductField, saveProduct, saving }) {
+  const totalStock = products.reduce((sum, product) => sum + Number(product.stock || 0), 0);
+  const lowStock = products.filter((product) => product.enabled && Number(product.stock) <= 1).length;
+  const disabled = products.filter((product) => !product.enabled).length;
+
   return (
-    <section className="panel">
-      <div className="panel-heading">
-        <h2>Tồn kho sản phẩm</h2>
-        <span>{products.length} slot</span>
-      </div>
-      <div className="product-grid">
-        {products.map((product) => (
-          <article key={product.id} className={`product-row product-row-${productTone(product)}`}>
-            <div className="slot-badge">SP{product.slot}</div>
-            <label>
-              Tên
-              <input value={product.name || ""} onChange={(event) => updateProductField(product.slot, "name", event.target.value)} />
-            </label>
-            <label>
-              Giá
-              <input type="number" min="0" step="1000" value={product.price} onChange={(event) => updateProductField(product.slot, "price", event.target.value)} />
-            </label>
-            <label>
-              Tồn
-              <input type="number" min="0" value={product.stock} onChange={(event) => updateProductField(product.slot, "stock", event.target.value)} />
-            </label>
-            <label>
-              Sức chứa
-              <input type="number" min="0" value={product.capacity} onChange={(event) => updateProductField(product.slot, "capacity", event.target.value)} />
-            </label>
-            <label className="switch-row">
-              <input type="checkbox" checked={Boolean(product.enabled)} onChange={(event) => updateProductField(product.slot, "enabled", event.target.checked)} />
-              Bật
-            </label>
-            <button className="icon-button save-button" onClick={() => saveProduct(product)} disabled={saving === `product-${product.slot}`}>
-              <Save size={18} />
-              <span>Lưu</span>
-            </button>
-          </article>
-        ))}
-      </div>
+    <section className="stack">
+      <section className="inventory-header panel">
+        <div>
+          <p>Máy đang chỉnh</p>
+          <h2>{displayMachineName(currentMachine || machineId)}</h2>
+          <span>{machineId}</span>
+        </div>
+        <label>
+          Chọn máy
+          <select value={machineId} onChange={(event) => setMachineId(event.target.value)}>
+            {machines.map((machine) => (
+              <option key={machine.id} value={machine.id}>
+                {displayMachineName(machine)} ({machine.id})
+              </option>
+            ))}
+          </select>
+        </label>
+      </section>
+
+      <section className="inventory-summary">
+        <MetricCard icon={Box} label="Tổng tồn kho" value={totalStock} hint={`${products.length} slot sản phẩm`} tone="blue" />
+        <MetricCard icon={AlertTriangle} label="Sản phẩm hết hàng" value={lowStock} hint="Slot hết hoặc sắp hết hàng" tone="orange" />
+        <MetricCard icon={Settings} label="Slot đang tắt" value={disabled} hint="Không bán trên máy" tone="teal" />
+      </section>
+
+      <section className="inventory-grid">
+        {products.map((product) => {
+          const fill = percent(product.stock, product.capacity);
+          const tone = productTone(product);
+          return (
+            <article key={product.id} className={`inventory-card inventory-card-${tone}`}>
+              <header className="inventory-card-head">
+                <div className="slot-badge">SP{product.slot}</div>
+                <div>
+                  <h2>{product.name || `Sản phẩm ${product.slot}`}</h2>
+                  <p>{money(product.price)} · còn {Number(product.stock || 0)}/{Number(product.capacity || 0)}</p>
+                </div>
+                <Pill tone={tone}>{productStatusLabel(product)}</Pill>
+              </header>
+
+              <div className={`stock-meter stock-meter-${tone}`}>
+                <span style={{ width: `${fill}%` }} />
+              </div>
+
+              <div className="inventory-fields">
+                <label>
+                  Tên sản phẩm
+                  <input value={product.name || ""} onChange={(event) => updateProductField(product.slot, "name", event.target.value)} />
+                </label>
+                <label>
+                  Giá bán
+                  <input type="number" min="0" step="1000" value={product.price} onChange={(event) => updateProductField(product.slot, "price", event.target.value)} />
+                </label>
+                <label>
+                  Số lượng còn
+                  <input type="number" min="0" value={product.stock} onChange={(event) => updateProductField(product.slot, "stock", event.target.value)} />
+                </label>
+                <label>
+                  Sức chứa tối đa
+                  <input type="number" min="0" value={product.capacity} onChange={(event) => updateProductField(product.slot, "capacity", event.target.value)} />
+                </label>
+              </div>
+
+              <footer className="inventory-actions">
+                <label className="switch-row">
+                  <input type="checkbox" checked={Boolean(product.enabled)} onChange={(event) => updateProductField(product.slot, "enabled", event.target.checked)} />
+                  Cho phép bán
+                </label>
+                <button className="primary-button" onClick={() => saveProduct(product)} disabled={saving === `product-${product.slot}`}>
+                  <Save size={18} />
+                  <span>{saving === `product-${product.slot}` ? "Đang lưu" : "Lưu slot"}</span>
+                </button>
+              </footer>
+            </article>
+          );
+        })}
+      </section>
     </section>
   );
 }
