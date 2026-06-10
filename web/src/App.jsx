@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   Clock3,
   Coins,
-  Cpu,
   Database,
   MapPin,
   PackageCheck,
@@ -632,7 +631,7 @@ export default function App() {
           value={dashboard.lowStockProducts.length}
           tone={dashboard.lowStockProducts.length ? "warning" : "success"}
         />
-        <Stat icon={Cpu} label="Firmware" value={currentMachine?.firmware_version || "-"} tone="neutral" />
+        <Stat icon={Banknote} label="Tiền trả lại" value={money(currentMachine?.current_credit)} tone="money" />
         <Stat icon={Box} label="Tổng tồn kho" value={dashboard.totalStock} tone="neutral" />
       </section>
 
