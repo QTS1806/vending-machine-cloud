@@ -13,6 +13,7 @@ create table if not exists public.machines (
   cash_in_box integer not null default 0,
   total_sales integer not null default 0,
   total_revenue integer not null default 0,
+  total_refunded integer not null default 0,
   last_seen_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

@@ -138,6 +138,7 @@ String chuoiSerial = "";
 
 long tongDoanhThuMay = 0;
 long tongTienHopMay = 0;
+long tongTienDaTraLai = 0;
 int tongSanPhamDaBan = 0;
 
 volatile bool coTienCanGuiCloud = false;
@@ -156,6 +157,7 @@ void cloudTask(void *parameter);
 void xuLyCloud(unsigned long now);
 void queueProductCloudSync(int sp);
 bool cloudSendPendingProductSync();
+void hoanTienChoKhach();
 
 void setup()
 {
@@ -414,7 +416,7 @@ void cloudBootstrap()
     return;
   }
 
-  StaticJsonDocument<256> machine;
+  StaticJsonDocument<320> machine;
   machine["id"] = MACHINE_ID;
   machine["name"] = "May ban hang 001";
   machine["location"] = "Phong test";
@@ -424,6 +426,7 @@ void cloudBootstrap()
   machine["cash_in_box"] = tongTienHopMay;
   machine["total_sales"] = tongSanPhamDaBan;
   machine["total_revenue"] = tongDoanhThuMay;
+  machine["total_refunded"] = tongTienDaTraLai;
 
   String body;
   serializeJson(machine, body);
@@ -517,13 +520,14 @@ void xuLyCloud(unsigned long now)
 
 void cloudHeartbeat(const String &status)
 {
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<320> doc;
   doc["status"] = status;
   doc["firmware_version"] = FIRMWARE_VERSION;
   doc["current_credit"] = tienDangCo;
   doc["cash_in_box"] = tongTienHopMay;
   doc["total_sales"] = tongSanPhamDaBan;
   doc["total_revenue"] = tongDoanhThuMay;
+  doc["total_refunded"] = tongTienDaTraLai;
 
   String body;
   serializeJson(doc, body);
@@ -767,10 +771,7 @@ bool cloudApplyCommand(const String &type, JsonVariant payload)
 
   if (type == "refund_credit")
   {
-    tienDangCo = 0;
-    sanPhamDangChon = 0;
-    showMessage("Da hoan tien", "Tien:0");
-    mocCloudHeartbeat = 0;
+    hoanTienChoKhach();
     return true;
   }
 
@@ -1174,10 +1175,7 @@ void xuLyPhimHoanTien(char phim)
 {
   if (phim == '9')
   {
-    tienDangCo = 0;
-    sanPhamDangChon = 0;
-    cheDoMay = CHE_DO_BAN_HANG;
-    showMessage("Da hoan tien", "Tien:0");
+    hoanTienChoKhach();
   }
   else if (phim == '6')
   {
@@ -1302,6 +1300,23 @@ void xuLyPhimSoLuong(char phim)
   }
 
   hienThiSuaSoLuong();
+}
+
+void hoanTienChoKhach()
+{
+  long tienTraLai = tienDangCo;
+  if (tienTraLai > 0)
+  {
+    tongTienDaTraLai += tienTraLai;
+    Serial.print("#CLOUD_QUEUE:REFUND ");
+    Serial.println(tienTraLai);
+  }
+
+  tienDangCo = 0;
+  sanPhamDangChon = 0;
+  cheDoMay = CHE_DO_BAN_HANG;
+  showMessage("Da hoan tien", "Tien:0");
+  mocCloudHeartbeat = 0;
 }
 
 int phimThanhSanPham(char phim)
