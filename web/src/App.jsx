@@ -19,6 +19,7 @@ import {
   Send,
   Settings,
   ShoppingCart,
+  Trash2,
   TrendingUp,
   Wifi,
 } from "lucide-react";
@@ -491,6 +492,44 @@ export default function App() {
     setSaving("");
   };
 
+  const deleteCurrentMachine = async () => {
+    if (!currentMachine) return;
+
+    if (machineId === DEFAULT_MACHINE_ID) {
+      setError(`Không xóa máy mặc định ${DEFAULT_MACHINE_ID}.`);
+      return;
+    }
+
+    const ok = window.confirm(
+      `Xóa máy ${currentMachine.name || machineId}? Toàn bộ sản phẩm, lịch sử bán, tiền, lệnh và sự kiện của máy này cũng sẽ bị xóa.`,
+    );
+    if (!ok) return;
+
+    setSaving("delete-machine");
+    setError("");
+    setNotice("");
+
+    const { error: deleteError } = await supabase.from("machines").delete().eq("id", machineId);
+
+    if (deleteError) {
+      setError(deleteError.message);
+    } else {
+      const remainingMachines = machines.filter((machine) => machine.id !== machineId);
+      const nextMachineId = remainingMachines[0]?.id || DEFAULT_MACHINE_ID;
+
+      setMachines(remainingMachines);
+      setMachineId(nextMachineId);
+      setProducts([]);
+      setSales([]);
+      setMoneyEvents([]);
+      setCommands([]);
+      setEvents([]);
+      setNotice(`Đã xóa máy ${machineId}`);
+    }
+
+    setSaving("");
+  };
+
   if (!isConfigured) {
     return (
       <main className="shell">
@@ -550,6 +589,15 @@ export default function App() {
           <RefreshCw size={18} className={loading ? "spin" : ""} />
           <span>Làm mới</span>
         </button>
+
+        <button
+          className="icon-button danger-action"
+          onClick={deleteCurrentMachine}
+          disabled={!currentMachine || machineId === DEFAULT_MACHINE_ID || saving === "delete-machine"}
+        >
+          <Trash2 size={18} />
+          <span>{saving === "delete-machine" ? "Đang xóa" : "Xóa máy"}</span>
+        </button>
       </section>
 
       {error && (
@@ -600,10 +648,6 @@ export default function App() {
         <button className="icon-button" onClick={() => sendSimpleCommand("refresh_config")} disabled={saving === "refresh_config"}>
           <Settings size={18} />
           <span>Đồng bộ lại</span>
-        </button>
-        <button className="icon-button danger-action" onClick={() => sendSimpleCommand("refund_credit")} disabled={saving === "refund_credit"}>
-          <Banknote size={18} />
-          <span>Hoàn tiền</span>
         </button>
       </section>
 
