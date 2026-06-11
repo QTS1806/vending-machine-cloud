@@ -122,10 +122,11 @@ bool dangDoiTienVe = false;
 bool daRoiKhoiCamBienMotor = false;
 bool daBaoGioiHanTien = false;
 bool daCloudBootstrap = false;
+bool daTaiCauHinhTuCloud = false;
 int soLoiCloudLienTiep = 0;
 wl_status_t trangThaiWifiCu = WL_IDLE_STATUS;
 
-long tienDangCo = 100000;
+long tienDangCo = 0;
 long tienMoiNhan = 0;
 int sanPhamDangChon = 0;
 int sanPhamDangBan = 0;
@@ -161,11 +162,15 @@ TaskHandle_t cloudTaskHandle = nullptr;
 
 void cloudTask(void *parameter);
 void xuLyCloud(unsigned long now);
+bool coDuLieuLocalChoGuiCloud();
+bool cloudFetchProductsFromWeb();
+void cloudUpsertProduct(int sp);
 void queueProductCloudSync(int sp);
 bool cloudSendPendingProductSync();
 void queueCloudEvent(const String &eventType, const String &severity, const String &message, long amount = -1, int slot = 0);
 bool cloudLogEvent(const String &eventType, const String &severity, const String &message, long amount = -1, int slot = 0);
 bool cloudSendPendingEvent();
+bool cloudApplyProductPayload(JsonVariant payload);
 void hoanTienChoKhach();
 
 void setup()
@@ -425,6 +430,11 @@ void cloudBootstrap()
     return;
   }
 
+  if (!daTaiCauHinhTuCloud && !coDuLieuLocalChoGuiCloud())
+  {
+    daTaiCauHinhTuCloud = cloudFetchProductsFromWeb();
+  }
+
   StaticJsonDocument<320> machine;
   machine["id"] = MACHINE_ID;
   machine["name"] = "Máy bán hàng 001";
@@ -443,6 +453,72 @@ void cloudBootstrap()
   {
     cloudLogEvent("machine_online", "info", "Máy đã bật và kết nối cloud");
   }
+}
+
+bool coDuLieuLocalChoGuiCloud()
+{
+  if (coTienCanGuiCloud || coBanHangCanGuiCloud || coEventCanGuiCloud)
+  {
+    return true;
+  }
+
+  for (int sp = 1; sp <= soSanPham; sp++)
+  {
+    if (coSanPhamCanGuiCloud[sp])
+    {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool cloudFetchProductsFromWeb()
+{
+  String response;
+  String path = String("products?select=slot,price,stock,enabled")
+                + "&machine_id=eq." + MACHINE_ID
+                + "&order=slot.asc";
+
+  if (!cloudRequest("GET", path, "", &response))
+  {
+    return false;
+  }
+
+  DynamicJsonDocument doc(4096);
+  DeserializationError error = deserializeJson(doc, response);
+  if (error || !doc.is<JsonArray>())
+  {
+    Serial.println("#CLOUD_CONFIG:PARSE_FAIL");
+    return false;
+  }
+
+  JsonArray items = doc.as<JsonArray>();
+  int applied = 0;
+  for (JsonObject item : items)
+  {
+    if (cloudApplyProductPayload(item))
+    {
+      applied++;
+    }
+  }
+
+  if (applied == 0)
+  {
+    for (int sp = 1; sp <= soSanPham; sp++)
+    {
+      cloudUpsertProduct(sp);
+    }
+    Serial.println("#CLOUD_CONFIG:SEEDED_DEFAULTS");
+  }
+  else
+  {
+    Serial.print("#CLOUD_CONFIG:APPLIED:");
+    Serial.println(applied);
+  }
+
+  showHome();
+  return true;
 }
 
 void xuLyCloud(unsigned long now)
@@ -515,6 +591,15 @@ void xuLyCloud(unsigned long now)
   if (cloudSendPendingProductSync())
   {
     return;
+  }
+
+  if (!daTaiCauHinhTuCloud && !coDuLieuLocalChoGuiCloud())
+  {
+    if (trangThaiTien == TIEN_CHO && trangThaiBanHang == BAN_HANG_CHO && now - mocHoatDongLocal >= CLOUD_IDLE_MS)
+    {
+      daTaiCauHinhTuCloud = cloudFetchProductsFromWeb();
+      return;
+    }
   }
 
   if (trangThaiTien != TIEN_CHO || trangThaiBanHang != BAN_HANG_CHO)
@@ -838,12 +923,9 @@ bool cloudApplyCommand(const String &type, JsonVariant payload)
 
   if (type == "refresh_config")
   {
-    for (int sp = 1; sp <= soSanPham; sp++)
-    {
-      queueProductCloudSync(sp);
-    }
+    bool ok = cloudFetchProductsFromWeb();
     mocCloudHeartbeat = 0;
-    return true;
+    return ok;
   }
 
   return false;

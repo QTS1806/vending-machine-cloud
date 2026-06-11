@@ -224,7 +224,7 @@ export default function App() {
         title: event.event_type === "motor_timeout" ? `${eventMachineName}: Động cơ quay quá lâu` : `Cảnh báo ${eventMachineName}`,
         text:
           event.event_type === "offline_detected"
-            ? `Không tìm thấy tín hiệu từ ${eventMachineName}. ${event.message || ""}`.trim()
+            ? event.message || `Không tìm thấy tín hiệu từ ${eventMachineName}.`
             : event.message || time(event.created_at),
       });
     }
@@ -858,8 +858,8 @@ function OverviewPage({ dashboard, machines, products, sales, machineId, setMach
       <section className="metric-grid">
         <MetricCard icon={Database} label="Tổng số máy" value={machines.length} hint={`${dashboard.onlineMachines.length} máy đang hoạt động`} tone="blue" />
         <MetricCard icon={CheckCircle2} label="Máy đang hoạt động" value={dashboard.onlineMachines.length} hint={`${machines.length ? Math.round((dashboard.onlineMachines.length / machines.length) * 100) : 0}% tổng số máy`} tone="green" />
-        <MetricCard icon={TrendingUp} label="Doanh thu hôm nay" value={money(dashboard.revenueToday)} hint={`${dashboard.soldToday} sản phẩm đã bán`} tone="teal" />
-        <MetricCard icon={AlertTriangle} label="Sản phẩm hết hàng" value={dashboard.outOfStockProducts.length} hint={`${dashboard.outOfStockProducts.length} sản phẩm hết hàng`} tone="orange" />
+        <MetricCard icon={TrendingUp} label="Doanh thu hôm nay" value={money(dashboard.revenueToday)} hint={`${dashboard.soldToday} sản phẩm đã bán trên tất cả máy`} tone="teal" />
+        <MetricCard icon={AlertTriangle} label="Sản phẩm hết hàng" value={dashboard.outOfStockProducts.length} hint={`${dashboard.outOfStockProducts.length} sản phẩm hết hàng trên tất cả máy`} tone="orange" />
       </section>
 
       <section className="dashboard-grid">
