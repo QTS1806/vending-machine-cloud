@@ -843,6 +843,11 @@ function Sidebar({ activeTab, setActiveTab }) {
     ["alerts", AlertTriangle, "Cảnh báo"],
     ["commands", ListChecks, "Lệnh cấu hình"],
   ];
+  const members = [
+    ["Nguyễn Văn Quân", "22021511"],
+    ["Nguyễn Bình Minh", "22021504"],
+    ["Nguyễn Việt Tiến", "22021500"],
+  ];
 
   return (
     <aside className="sidebar">
@@ -864,6 +869,13 @@ function Sidebar({ activeTab, setActiveTab }) {
           </button>
         ))}
       </nav>
+
+      <section className="sidebar-members">
+        <strong>Thành viên nhóm</strong>
+        {members.map(([name, studentId]) => (
+          <span key={studentId}>{name} {studentId}</span>
+        ))}
+      </section>
     </aside>
   );
 }
@@ -900,8 +912,6 @@ function OverviewPage({ dashboard, machines, products, sales, machineRevenueToda
         <MetricCard icon={AlertTriangle} label="Sản phẩm hết hàng" value={dashboard.outOfStockProducts.length} hint={`${dashboard.outOfStockProducts.length} sản phẩm hết hàng trên tất cả máy`} tone="orange" />
       </section>
 
-      <TeamInfo />
-
       <section className="dashboard-grid">
         <section className="overview-left-stack">
           <section className="panel machine-table-panel">
@@ -927,31 +937,6 @@ function OverviewPage({ dashboard, machines, products, sales, machineRevenueToda
         </section>
       </section>
     </>
-  );
-}
-
-function TeamInfo() {
-  const members = [
-    ["Nguyễn Văn Quân", "22021511"],
-    ["Nguyễn Bình Minh", "22021504"],
-    ["Nguyễn Việt Tiến", "22021500"],
-  ];
-
-  return (
-    <section className="team-panel">
-      <div>
-        <h2>Thông tin thành viên nhóm</h2>
-        <p>Nhóm 1 - Máy bán hàng tự động</p>
-      </div>
-      <div className="team-list">
-        {members.map(([name, studentId]) => (
-          <article key={studentId} className="team-member">
-            <strong>{name}</strong>
-            <span>{studentId}</span>
-          </article>
-        ))}
-      </div>
-    </section>
   );
 }
 
