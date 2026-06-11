@@ -16,6 +16,7 @@ import {
   ShoppingCart,
   Trash2,
   TrendingUp,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -30,6 +31,7 @@ const isConfigured =
 const supabase = isConfigured ? createClient(supabaseUrl, supabaseAnonKey) : null;
 const DEFAULT_MACHINE_ID = "vending-001";
 const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
+const DISMISSED_ALERTS_KEY = "vending-dismissed-alerts";
 
 function money(value) {
   return `${Number(value || 0).toLocaleString("vi-VN")} đ`;
@@ -176,9 +178,17 @@ export default function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [newMachineId, setNewMachineId] = useState("vending-002");
+  const [dismissedAlerts, setDismissedAlerts] = useState(() => {
+    try {
+      return JSON.parse(window.localStorage.getItem(DISMISSED_ALERTS_KEY) || "[]");
+    } catch {
+      return [];
+    }
+  });
   const offlineLoggedRef = useRef(new Set());
 
   const currentMachine = machines.find((item) => item.id === machineId);
+  const dismissedAlertKeys = useMemo(() => new Set(dismissedAlerts), [dismissedAlerts]);
 
   const machineRevenueToday = useMemo(() => {
     const revenueMap = new Map();
@@ -216,6 +226,7 @@ export default function App() {
     for (const item of outOfStockProducts) {
       const machineName = displayMachineName(item.machine_id || currentMachine || machineId);
       alerts.push({
+        key: `out-of-stock:${item.machine_id || machineId}:${item.slot}:${item.updated_at || item.stock}`,
         tone: "danger",
         title: `${machineName} hết hàng`,
         text: `${displayProductName(item)} tại SP${item.slot} đã hết hàng.`,
@@ -234,6 +245,7 @@ export default function App() {
 
       const eventMachineName = displayMachineWithId(event.machine_id || currentMachine || machineId);
       alerts.push({
+        key: `event:${event.id || dedupeKey}`,
         tone: event.severity === "error" ? "danger" : "warning",
         title: event.event_type === "motor_timeout" ? `${eventMachineName}: Động cơ quay quá lâu` : `Cảnh báo ${eventMachineName}`,
         text:
@@ -282,7 +294,7 @@ export default function App() {
 
     return {
       activity,
-      alerts,
+      alerts: alerts.filter((alert) => !dismissedAlertKeys.has(alert.key)),
       disabledProducts,
       insertedToday,
       onlineMachines,
@@ -292,7 +304,7 @@ export default function App() {
       soldToday: todaySales.length,
       topProduct,
     };
-  }, [allProducts, commands, currentMachine, events, machineId, machines, moneyEvents, sales]);
+  }, [allProducts, commands, currentMachine, dismissedAlertKeys, events, machineId, machines, moneyEvents, sales]);
 
   const loadData = useCallback(async () => {
     if (!supabase) return;
@@ -469,6 +481,15 @@ export default function App() {
 
     return () => window.clearTimeout(timer);
   }, [error, notice]);
+
+  useEffect(() => {
+    window.localStorage.setItem(DISMISSED_ALERTS_KEY, JSON.stringify(dismissedAlerts));
+  }, [dismissedAlerts]);
+
+  const dismissAlert = (alertKey) => {
+    if (!alertKey) return;
+    setDismissedAlerts((current) => (current.includes(alertKey) ? current : [...current, alertKey]));
+  };
 
   const updateProductField = (slot, field, value) => {
     setProducts((current) =>
@@ -737,6 +758,7 @@ export default function App() {
               machineRevenueToday={machineRevenueToday}
               machineId={machineId}
               setMachineId={setMachineId}
+              onDismissAlert={dismissAlert}
             />
           )}
 
@@ -788,7 +810,7 @@ export default function App() {
           )}
 
           {activeTab === "alerts" && (
-            <AlertsPage alerts={dashboard.alerts} events={events} currentMachine={currentMachine} />
+            <AlertsPage alerts={dashboard.alerts} events={events} currentMachine={currentMachine} onDismissAlert={dismissAlert} />
           )}
 
           {activeTab === "commands" && (
@@ -868,7 +890,7 @@ function PageHeader({ activeTab }) {
   );
 }
 
-function OverviewPage({ dashboard, machines, products, sales, machineRevenueToday, machineId, setMachineId }) {
+function OverviewPage({ dashboard, machines, products, sales, machineRevenueToday, machineId, setMachineId, onDismissAlert }) {
   return (
     <>
       <section className="metric-grid">
@@ -898,7 +920,7 @@ function OverviewPage({ dashboard, machines, products, sales, machineRevenueToda
         </section>
 
         <section className="right-stack">
-          <AlertPanel alerts={dashboard.alerts} />
+          <AlertPanel alerts={dashboard.alerts} onDismiss={onDismissAlert} />
           <ActivityPanel activity={dashboard.activity} />
         </section>
       </section>
@@ -936,7 +958,7 @@ function MachineTable({ machines, selectedId, onSelect, machineRevenueToday }) {
   );
 }
 
-function AlertPanel({ alerts }) {
+function AlertPanel({ alerts, onDismiss }) {
   return (
     <section className="panel">
       <div className="panel-heading">
@@ -945,12 +967,15 @@ function AlertPanel({ alerts }) {
       </div>
       <div className="alert-list">
         {alerts.map((alert) => (
-          <article key={`${alert.title}-${alert.text}`} className={`alert-card alert-card-${alert.tone}`}>
+          <article key={alert.key || `${alert.title}-${alert.text}`} className={`alert-card alert-card-${alert.tone}`}>
             {alert.tone === "danger" ? <AlertTriangle size={18} /> : <AlertCircle size={18} />}
             <div>
               <strong>{alert.title}</strong>
               <p>{alert.text}</p>
             </div>
+            <button className="alert-dismiss" type="button" onClick={() => onDismiss?.(alert.key)} aria-label="Xóa cảnh báo">
+              <X size={16} />
+            </button>
           </article>
         ))}
         {!alerts.length && (
@@ -1208,10 +1233,10 @@ function MoneyPage({ currentMachine, machines, moneyEvents, events }) {
   );
 }
 
-function AlertsPage({ alerts, events, currentMachine }) {
+function AlertsPage({ alerts, events, currentMachine, onDismissAlert }) {
   return (
     <section className="two-column alerts-layout">
-      <AlertPanel alerts={alerts} />
+      <AlertPanel alerts={alerts} onDismiss={onDismissAlert} />
       <DataTable
         title="Nhật ký máy"
         rows={events}

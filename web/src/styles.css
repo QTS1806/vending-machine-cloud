@@ -553,6 +553,25 @@ h2 {
   padding: 10px;
 }
 
+.alert-card {
+  grid-template-columns: 36px minmax(0, 1fr) 30px;
+}
+
+.alert-dismiss {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  color: currentColor;
+}
+
+.alert-dismiss:hover {
+  background: rgba(255, 255, 255, 0.95);
+}
+
 .alert-card-warning {
   background: #fff7e8;
   color: #b54708;
