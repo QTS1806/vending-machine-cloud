@@ -299,7 +299,7 @@ h2 {
 }
 
 .metric-grid.compact-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .metric-card {
@@ -742,7 +742,7 @@ select:focus {
 
 .inventory-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -802,7 +802,7 @@ select:focus {
 .inventory-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   border-top: 1px solid #eef2f6;
   padding-top: 14px;

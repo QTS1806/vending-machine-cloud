@@ -6,7 +6,6 @@ import {
   Box,
   CheckCircle2,
   Coins,
-  CreditCard,
   Database,
   LayoutDashboard,
   ListChecks,
@@ -30,6 +29,7 @@ const isConfigured =
 
 const supabase = isConfigured ? createClient(supabaseUrl, supabaseAnonKey) : null;
 const DEFAULT_MACHINE_ID = "vending-001";
+const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
 
 function money(value) {
   return `${Number(value || 0).toLocaleString("vi-VN")} đ`;
@@ -43,18 +43,32 @@ function time(value) {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
+    timeZone: VIETNAM_TIME_ZONE,
   }).format(new Date(value));
 }
 
-function startOfToday() {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  return date;
+function vietnamDateKey(value = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: VIETNAM_TIME_ZONE,
+    year: "numeric",
+  }).formatToParts(new Date(value));
+  const partMap = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${partMap.year}-${partMap.month}-${partMap.day}`;
+}
+
+function vietnamDayLabel(value) {
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: VIETNAM_TIME_ZONE,
+  }).format(new Date(value));
 }
 
 function isToday(value) {
   if (!value) return false;
-  return new Date(value) >= startOfToday();
+  return vietnamDateKey(value) === vietnamDateKey();
 }
 
 function ageText(value) {
@@ -109,6 +123,12 @@ function machineNumber(id) {
 function displayMachineName(machineOrId) {
   const id = typeof machineOrId === "string" ? machineOrId : machineOrId?.id;
   return `Máy bán hàng ${machineNumber(id)}`;
+}
+
+function displayProductName(product) {
+  const name = String(product?.name || "").trim();
+  if (!name) return `Sản phẩm ${product?.slot || ""}`.trim();
+  return name.replace(/^san\s*pham/i, "Sản phẩm");
 }
 
 function Pill({ tone, children }) {
@@ -176,7 +196,7 @@ export default function App() {
       alerts.push({
         tone: "danger",
         title: `${machineName} hết hàng`,
-        text: `${item.name || `Sản phẩm ${item.slot}`} tại SP${item.slot} đã hết hàng.`,
+        text: `${displayProductName(item)} tại SP${item.slot} đã hết hàng.`,
       });
     }
 
@@ -371,7 +391,7 @@ export default function App() {
 
     const price = Number(product.price);
     const stock = Number(product.stock);
-    const capacity = Number(product.capacity);
+    const capacity = Math.max(Number(product.capacity || 0), stock);
 
     if (!Number.isInteger(price) || price < 0 || price % 1000 !== 0) {
       setError(`SP${product.slot}: giá không hợp lệ`);
@@ -379,15 +399,15 @@ export default function App() {
       return;
     }
 
-    if (!Number.isInteger(stock) || stock < 0 || !Number.isInteger(capacity) || capacity < stock) {
-      setError(`SP${product.slot}: tồn kho/sức chứa không hợp lệ`);
+    if (!Number.isInteger(stock) || stock < 0) {
+      setError(`SP${product.slot}: tồn kho không hợp lệ`);
       setSaving("");
       return;
     }
 
     const payload = {
       slot: product.slot,
-      name: product.name || `Sản phẩm ${product.slot}`,
+      name: displayProductName(product),
       price,
       stock,
       capacity,
@@ -424,7 +444,7 @@ export default function App() {
       for (const product of products) {
         const payload = {
           slot: Number(product.slot),
-          name: product.name || `Sản phẩm ${product.slot}`,
+          name: displayProductName(product),
           price: Number(product.price),
           stock: Number(product.stock),
           capacity: Number(product.capacity),
@@ -443,7 +463,7 @@ export default function App() {
       await createCommand("sync_products", {
         products: products.map((item) => ({
           slot: Number(item.slot),
-          name: item.name || `Sản phẩm ${item.slot}`,
+          name: displayProductName(item),
           price: Number(item.price),
           stock: Number(item.stock),
           capacity: Number(item.capacity),
@@ -692,7 +712,7 @@ function Sidebar({ activeTab, setActiveTab }) {
     ["machines", Database, "Máy bán hàng"],
     ["products", Box, "Tồn kho"],
     ["sales", ShoppingCart, "Bán hàng"],
-    ["money", CreditCard, "Tiền"],
+    ["money", Banknote, "Tiền"],
     ["alerts", AlertTriangle, "Cảnh báo"],
     ["commands", ListChecks, "Lệnh cấu hình"],
   ];
@@ -727,7 +747,7 @@ function PageHeader({ activeTab }) {
     machines: ["Máy bán hàng", "Thêm, chọn và xóa các máy đang quản lý"],
     products: ["Tồn kho sản phẩm", "Cập nhật giá, số lượng và trạng thái từng slot"],
     sales: ["Lịch sử bán hàng", "Theo dõi các giao dịch bán thành công từ ESP32"],
-    money: ["Tiền và giao dịch", "Theo dõi tiền nhận, tiền trong hộp và tiền đã trả lại"],
+    money: ["Tiền và giao dịch", "Theo dõi tiền đã nhận và tiền đã trả lại"],
     alerts: ["Cảnh báo", "Những việc cần chú ý từ máy và cloud"],
     commands: ["Lệnh cấu hình", "Theo dõi lệnh web gửi xuống ESP32"],
   };
@@ -750,7 +770,7 @@ function OverviewPage({ dashboard, machines, products, sales, machineId, setMach
         <MetricCard icon={Database} label="Tổng số máy" value={machines.length} hint={`${dashboard.onlineMachines.length} máy đang hoạt động`} tone="blue" />
         <MetricCard icon={CheckCircle2} label="Máy đang hoạt động" value={dashboard.onlineMachines.length} hint={`${machines.length ? Math.round((dashboard.onlineMachines.length / machines.length) * 100) : 0}% tổng số máy`} tone="green" />
         <MetricCard icon={TrendingUp} label="Doanh thu hôm nay" value={money(dashboard.revenueToday)} hint={`${dashboard.soldToday} sản phẩm đã bán`} tone="teal" />
-        <MetricCard icon={AlertTriangle} label="Sản phẩm hết hàng" value={dashboard.outOfStockProducts.length} hint="Chỉ báo khi tồn kho bằng 0" tone="orange" />
+        <MetricCard icon={AlertTriangle} label="Sản phẩm hết hàng" value={dashboard.outOfStockProducts.length} hint={`${dashboard.outOfStockProducts.length} sản phẩm hết hàng`} tone="orange" />
       </section>
 
       <section className="dashboard-grid">
@@ -868,13 +888,11 @@ function ActivityPanel({ activity }) {
 
 function RevenueBars({ sales }) {
   const days = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (6 - index));
-    date.setHours(0, 0, 0, 0);
-    const key = date.toISOString().slice(0, 10);
+    const date = new Date(Date.now() - (6 - index) * 24 * 60 * 60 * 1000);
+    const key = vietnamDateKey(date);
     return {
       key,
-      label: new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit" }).format(date),
+      label: vietnamDayLabel(date),
       revenue: 0,
     };
   });
@@ -882,7 +900,7 @@ function RevenueBars({ sales }) {
   const dayMap = new Map(days.map((day) => [day.key, day]));
   for (const sale of sales) {
     if (!sale.success || !sale.created_at) continue;
-    const key = new Date(sale.created_at).toISOString().slice(0, 10);
+    const key = vietnamDateKey(sale.created_at);
     const day = dayMap.get(key);
     if (day) {
       day.revenue += Number(sale.unit_price || 0);
@@ -951,7 +969,6 @@ function MachinesPage({ machines, machineId, setMachineId, newMachineId, setNewM
 function ProductsPage({ currentMachine, machineId, machines, products, setMachineId, updateProductField, saveProduct, saving }) {
   const totalStock = products.reduce((sum, product) => sum + Number(product.stock || 0), 0);
   const outOfStock = products.filter((product) => product.enabled && Number(product.stock) <= 0).length;
-  const disabled = products.filter((product) => !product.enabled).length;
 
   return (
     <section className="stack">
@@ -975,8 +992,7 @@ function ProductsPage({ currentMachine, machineId, machines, products, setMachin
 
       <section className="inventory-summary">
         <MetricCard icon={Box} label="Tổng tồn kho" value={totalStock} hint={`${products.length} slot sản phẩm`} tone="blue" />
-        <MetricCard icon={AlertTriangle} label="Sản phẩm hết hàng" value={outOfStock} hint="Slot có tồn kho bằng 0" tone="orange" />
-        <MetricCard icon={Settings} label="Slot đang tắt" value={disabled} hint="Không bán trên máy" tone="teal" />
+        <MetricCard icon={AlertTriangle} label="Sản phẩm hết hàng" value={outOfStock} hint={`${outOfStock} sản phẩm hết hàng`} tone="orange" />
       </section>
 
       <section className="inventory-grid">
@@ -988,8 +1004,8 @@ function ProductsPage({ currentMachine, machineId, machines, products, setMachin
               <header className="inventory-card-head">
                 <div className="slot-badge">SP{product.slot}</div>
                 <div>
-                  <h2>{product.name || `Sản phẩm ${product.slot}`}</h2>
-                  <p>{money(product.price)} · còn {Number(product.stock || 0)}/{Number(product.capacity || 0)}</p>
+                  <h2>{displayProductName(product)}</h2>
+                  <p>{money(product.price)} · còn {Number(product.stock || 0)} sản phẩm</p>
                 </div>
                 <Pill tone={tone}>{productStatusLabel(product)}</Pill>
               </header>
@@ -1001,7 +1017,7 @@ function ProductsPage({ currentMachine, machineId, machines, products, setMachin
               <div className="inventory-fields">
                 <label>
                   Tên sản phẩm
-                  <input value={product.name || ""} onChange={(event) => updateProductField(product.slot, "name", event.target.value)} />
+                  <input value={displayProductName(product)} onChange={(event) => updateProductField(product.slot, "name", event.target.value)} />
                 </label>
                 <label>
                   Giá bán
@@ -1011,17 +1027,9 @@ function ProductsPage({ currentMachine, machineId, machines, products, setMachin
                   Số lượng còn
                   <input type="number" min="0" value={product.stock} onChange={(event) => updateProductField(product.slot, "stock", event.target.value)} />
                 </label>
-                <label>
-                  Sức chứa tối đa
-                  <input type="number" min="0" value={product.capacity} onChange={(event) => updateProductField(product.slot, "capacity", event.target.value)} />
-                </label>
               </div>
 
               <footer className="inventory-actions">
-                <label className="switch-row">
-                  <input type="checkbox" checked={Boolean(product.enabled)} onChange={(event) => updateProductField(product.slot, "enabled", event.target.checked)} />
-                  Cho phép bán
-                </label>
                 <button className="primary-button" onClick={() => saveProduct(product)} disabled={saving === `product-${product.slot}`}>
                   <Save size={18} />
                   <span>{saving === `product-${product.slot}` ? "Đang lưu" : "Lưu slot"}</span>
@@ -1061,9 +1069,8 @@ function MoneyPage({ currentMachine, moneyEvents }) {
   return (
     <section className="stack">
       <section className="metric-grid compact-grid">
-        <MetricCard icon={Banknote} label="Tiền trong hộp" value={money(currentMachine?.cash_in_box)} tone="blue" />
+        <MetricCard icon={Banknote} label="Tiền đã nhận" value={money(currentMachine?.cash_in_box)} tone="blue" />
         <MetricCard icon={Coins} label="Tiền đã trả lại" value={money(currentMachine?.total_refunded)} tone="orange" />
-        <MetricCard icon={CreditCard} label="Tiền đang có" value={money(currentMachine?.current_credit)} tone="green" />
       </section>
       <DataTable
         title="Lịch sử giao dịch"
