@@ -873,7 +873,10 @@ function Sidebar({ activeTab, setActiveTab }) {
       <section className="sidebar-members">
         <strong>Thành viên nhóm</strong>
         {members.map(([name, studentId]) => (
-          <span key={studentId}>{name} {studentId}</span>
+          <div key={studentId} className="sidebar-member-row">
+            <span className="member-name">{name}</span>
+            <span className="member-id">{studentId}</span>
+          </div>
         ))}
       </section>
     </aside>

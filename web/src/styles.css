@@ -128,8 +128,23 @@ button:disabled {
   font-weight: 950;
 }
 
-.sidebar-members span {
-  display: block;
+.sidebar-member-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 70px;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.member-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-id {
+  color: #0b6ee8;
+  font-weight: 900;
+  text-align: right;
 }
 
 .sidebar-footer {
