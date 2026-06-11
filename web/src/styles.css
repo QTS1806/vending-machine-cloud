@@ -727,6 +727,20 @@ h2 {
   gap: 16px;
 }
 
+.alerts-layout {
+  grid-template-columns: minmax(260px, 0.55fr) minmax(0, 1.45fr);
+  align-items: start;
+}
+
+.alerts-layout .alert-list {
+  max-height: min(300px, 42vh);
+  min-height: 0;
+}
+
+.alerts-layout .table-wrap {
+  max-height: min(680px, 72vh);
+}
+
 .form-panel {
   padding-bottom: 16px;
 }

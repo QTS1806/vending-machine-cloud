@@ -137,6 +137,11 @@ function displayProductName(product) {
   return name.replace(/^san\s*pham/i, "Sản phẩm");
 }
 
+function displayOfflineMessage(event, machineName) {
+  const message = event?.message || `Không tìm thấy tín hiệu từ ${machineName}.`;
+  return message.replace(" trong ", " từ ");
+}
+
 function Pill({ tone, children }) {
   return <span className={`pill pill-${tone}`}>{children}</span>;
 }
@@ -233,7 +238,7 @@ export default function App() {
         title: event.event_type === "motor_timeout" ? `${eventMachineName}: Động cơ quay quá lâu` : `Cảnh báo ${eventMachineName}`,
         text:
           event.event_type === "offline_detected"
-            ? event.message || `Không tìm thấy tín hiệu từ ${eventMachineName}.`
+            ? displayOfflineMessage(event, eventMachineName)
             : event.message || time(event.created_at),
       });
     }
@@ -443,7 +448,7 @@ export default function App() {
         machine_id: machine.id,
         event_type: "offline_detected",
         severity: "warning",
-        message: `Không tìm thấy tín hiệu từ ${displayMachineWithId(machine)} trong ${ageText(machine.last_seen_at)}.`,
+        message: `Không tìm thấy tín hiệu từ ${displayMachineWithId(machine)} từ ${ageText(machine.last_seen_at)}.`,
       }));
 
     if (!offlineEvents.length) return;
@@ -1147,16 +1152,18 @@ function ProductsPage({ currentMachine, machineId, machines, products, setMachin
 function MoneyPage({ currentMachine, machines, moneyEvents, events }) {
   const machineLookup = new Map(machines.map((machine) => [machine.id, machine]));
   const machineFor = (machineId) => machineLookup.get(machineId) || machineId || currentMachine;
+  const recentDayKeys = new Set(
+    Array.from({ length: 7 }, (_, index) => vietnamDateKey(new Date(Date.now() - index * 24 * 60 * 60 * 1000))),
+  );
   const receivedRows = moneyEvents.map((event) => ({
     ...event,
     transactionType: "in",
     transactionLabel: "Tiền nhận",
     machineName: displayMachineName(machineFor(event.machine_id)),
   }));
-  const receivedEventTotal = receivedRows.reduce((sum, event) => sum + Number(event.amount || 0), 0);
-  const machineCashTotal = machines.reduce((sum, machine) => sum + Number(machine.cash_in_box || 0), 0);
-  const displayedReceivedAmount = Math.max(receivedEventTotal, machineCashTotal);
-  const refundedAmount = machines.reduce((sum, machine) => sum + Number(machine.total_refunded || 0), 0);
+  const receivedSevenDayTotal = receivedRows
+    .filter((event) => recentDayKeys.has(vietnamDateKey(event.created_at)))
+    .reduce((sum, event) => sum + Number(event.amount || 0), 0);
   const refundEventRows = events
     .filter((event) => event.event_type === "refund")
     .map((event) => ({
@@ -1168,27 +1175,16 @@ function MoneyPage({ currentMachine, machines, moneyEvents, events }) {
       machineName: displayMachineName(machineFor(event.machine_id)),
     }))
     .filter((event) => event.amount > 0);
-  const refundEventTotal = refundEventRows.reduce((sum, event) => sum + Number(event.amount || 0), 0);
-  const displayedRefundedAmount = Math.max(refundedAmount, refundEventTotal);
-  const refundRows = !refundEventRows.length && displayedRefundedAmount
-    ? [
-        {
-          id: `refund-${currentMachine?.id || "machine"}`,
-          created_at: currentMachine?.updated_at || currentMachine?.last_seen_at,
-          amount: displayedRefundedAmount,
-          transactionType: "out",
-          transactionLabel: "Tiền ra",
-          machineName: "Tất cả máy",
-        },
-      ]
-    : [];
-  const transactionRows = [...receivedRows, ...refundEventRows, ...refundRows].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  const refundedSevenDayTotal = refundEventRows
+    .filter((event) => recentDayKeys.has(vietnamDateKey(event.created_at)))
+    .reduce((sum, event) => sum + Number(event.amount || 0), 0);
+  const transactionRows = [...receivedRows, ...refundEventRows].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 
   return (
     <section className="stack">
       <section className="metric-grid compact-grid">
-        <MetricCard icon={Banknote} label="Tiền đã nhận" value={money(displayedReceivedAmount)} tone="blue" />
-        <MetricCard icon={Coins} label="Tiền đã trả lại" value={money(displayedRefundedAmount)} tone="orange" />
+        <MetricCard icon={Banknote} label="Tiền đã nhận trong 7 ngày" value={money(receivedSevenDayTotal)} tone="blue" />
+        <MetricCard icon={Coins} label="Tiền đã trả lại trong 7 ngày" value={money(refundedSevenDayTotal)} tone="orange" />
       </section>
       <DataTable
         title="Lịch sử giao dịch"
@@ -1214,7 +1210,7 @@ function MoneyPage({ currentMachine, machines, moneyEvents, events }) {
 
 function AlertsPage({ alerts, events, currentMachine }) {
   return (
-    <section className="two-column">
+    <section className="two-column alerts-layout">
       <AlertPanel alerts={alerts} />
       <DataTable
         title="Nhật ký máy"
@@ -1224,7 +1220,7 @@ function AlertsPage({ alerts, events, currentMachine }) {
           ["machine_id", "Máy", (row) => displayMachineWithId(row.machine_id || currentMachine)],
           ["event_type", "Loại", (row) => row.event_type],
           ["severity", "Mức", (row) => <Pill tone={row.severity === "error" ? "danger" : row.severity === "warning" ? "warning" : "neutral"}>{row.severity}</Pill>],
-          ["message", "Nội dung", (row) => row.message || "-"],
+          ["message", "Nội dung", (row) => (row.event_type === "offline_detected" ? displayOfflineMessage(row, displayMachineWithId(row.machine_id || currentMachine)) : row.message || "-")],
         ]}
       />
     </section>
