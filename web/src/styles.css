@@ -130,9 +130,9 @@ button:disabled {
 
 .sidebar-member-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 70px;
+  grid-template-columns: minmax(0, 1fr) 58px;
   align-items: baseline;
-  gap: 8px;
+  gap: 4px;
 }
 
 .member-name {
@@ -144,7 +144,7 @@ button:disabled {
 .member-id {
   color: #0b6ee8;
   font-weight: 900;
-  text-align: right;
+  text-align: left;
 }
 
 .sidebar-footer {
