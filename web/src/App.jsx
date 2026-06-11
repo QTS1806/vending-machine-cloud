@@ -146,7 +146,6 @@ export default function App() {
   const [newMachineId, setNewMachineId] = useState("vending-002");
 
   const currentMachine = machines.find((item) => item.id === machineId);
-  const onlineTone = machineTone(currentMachine);
 
   const dashboard = useMemo(() => {
     const successfulSales = sales.filter((sale) => sale.success);
@@ -154,12 +153,10 @@ export default function App() {
     const todayMoney = moneyEvents.filter((item) => isToday(item.created_at));
     const revenueToday = todaySales.reduce((sum, sale) => sum + Number(sale.unit_price || 0), 0);
     const insertedToday = todayMoney.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const lowStockProducts = products.filter((item) => item.enabled && Number(item.stock) <= 1);
+    const outOfStockProducts = products.filter((item) => item.enabled && Number(item.stock) <= 0);
     const disabledProducts = products.filter((item) => !item.enabled);
     const pendingCommands = commands.filter((item) => item.status === "pending" || item.status === "sent");
-    const failedCommands = commands.filter((item) => item.status === "error");
     const onlineMachines = machines.filter((machine) => machineTone(machine) === "success");
-    const totalStock = products.reduce((sum, item) => sum + Number(item.stock || 0), 0);
 
     const slotSales = new Map();
     for (const sale of todaySales) {
@@ -174,32 +171,12 @@ export default function App() {
     const topProduct = [...slotSales.values()].sort((a, b) => b.count - a.count)[0];
 
     const alerts = [];
-    if (onlineTone !== "success") {
+    for (const item of outOfStockProducts) {
+      const machineName = displayMachineName(item.machine_id || currentMachine || machineId);
       alerts.push({
         tone: "danger",
-        title: "Máy đang xem ngoại tuyến",
-        text: `Tín hiệu cuối: ${ageText(currentMachine?.last_seen_at)}.`,
-      });
-    }
-    for (const item of lowStockProducts) {
-      alerts.push({
-        tone: Number(item.stock) <= 0 ? "danger" : "warning",
-        title: `SP${item.slot} ${Number(item.stock) <= 0 ? "hết hàng" : "sắp hết"}`,
-        text: `${item.name || "Sản phẩm"} còn ${Number(item.stock || 0)}/${Number(item.capacity || 0)}.`,
-      });
-    }
-    if (pendingCommands.length) {
-      alerts.push({
-        tone: "warning",
-        title: "Có lệnh đang chờ ESP32",
-        text: `${pendingCommands.length} lệnh pending/sent.`,
-      });
-    }
-    if (failedCommands.length) {
-      alerts.push({
-        tone: "danger",
-        title: "Có lệnh cấu hình lỗi",
-        text: `${failedCommands.length} lệnh bị lỗi.`,
+        title: `${machineName} hết hàng`,
+        text: `${item.name || `Sản phẩm ${item.slot}`} tại SP${item.slot} đã hết hàng.`,
       });
     }
 
@@ -232,15 +209,14 @@ export default function App() {
       alerts,
       disabledProducts,
       insertedToday,
-      lowStockProducts,
       onlineMachines,
+      outOfStockProducts,
       pendingCommands,
       revenueToday,
       soldToday: todaySales.length,
       topProduct,
-      totalStock,
     };
-  }, [commands, currentMachine, machines, moneyEvents, onlineTone, products, sales]);
+  }, [commands, currentMachine, machineId, machines, moneyEvents, products, sales]);
 
   const loadData = useCallback(async () => {
     if (!supabase) return;
@@ -774,7 +750,7 @@ function OverviewPage({ dashboard, machines, products, sales, machineId, setMach
         <MetricCard icon={Database} label="Tổng số máy" value={machines.length} hint={`${dashboard.onlineMachines.length} máy đang hoạt động`} tone="blue" />
         <MetricCard icon={CheckCircle2} label="Máy đang hoạt động" value={dashboard.onlineMachines.length} hint={`${machines.length ? Math.round((dashboard.onlineMachines.length / machines.length) * 100) : 0}% tổng số máy`} tone="green" />
         <MetricCard icon={TrendingUp} label="Doanh thu hôm nay" value={money(dashboard.revenueToday)} hint={`${dashboard.soldToday} sản phẩm đã bán`} tone="teal" />
-        <MetricCard icon={AlertTriangle} label="Cảnh báo tồn kho" value={dashboard.lowStockProducts.length} hint="Sản phẩm hết hàng" tone="orange" />
+        <MetricCard icon={AlertTriangle} label="Sản phẩm hết hàng" value={dashboard.outOfStockProducts.length} hint="Chỉ báo khi tồn kho bằng 0" tone="orange" />
       </section>
 
       <section className="dashboard-grid">
@@ -799,13 +775,6 @@ function OverviewPage({ dashboard, machines, products, sales, machineId, setMach
           <RevenueBars sales={sales} />
         </section>
 
-        <section className="panel stock-panel">
-          <div className="panel-heading">
-            <h2>Tồn kho sản phẩm</h2>
-            <span>{dashboard.totalStock} sản phẩm</span>
-          </div>
-          <StockList products={products} />
-        </section>
       </section>
     </>
   );
@@ -944,29 +913,6 @@ function RevenueBars({ sales }) {
   );
 }
 
-function StockList({ products }) {
-  return (
-    <div className="stock-list">
-      {products.slice(0, 6).map((product) => {
-        const fill = percent(product.stock, product.capacity);
-        return (
-          <article key={product.id} className="stock-row">
-            <div>
-              <strong>{product.name || `SP${product.slot}`}</strong>
-              <small>SP{product.slot} · {Number(product.stock || 0)} còn lại</small>
-            </div>
-            <div className={`stock-meter stock-meter-${productTone(product)}`}>
-              <span style={{ width: `${fill}%` }} />
-            </div>
-            <Pill tone={productTone(product)}>{Math.round(fill)}%</Pill>
-          </article>
-        );
-      })}
-      {!products.length && <div className="empty compact">Chưa có sản phẩm</div>}
-    </div>
-  );
-}
-
 function MachinesPage({ machines, machineId, setMachineId, newMachineId, setNewMachineId, addMachine, deleteCurrentMachine, saving, currentMachine }) {
   return (
     <section className="two-column">
@@ -1004,7 +950,7 @@ function MachinesPage({ machines, machineId, setMachineId, newMachineId, setNewM
 
 function ProductsPage({ currentMachine, machineId, machines, products, setMachineId, updateProductField, saveProduct, saving }) {
   const totalStock = products.reduce((sum, product) => sum + Number(product.stock || 0), 0);
-  const lowStock = products.filter((product) => product.enabled && Number(product.stock) <= 1).length;
+  const outOfStock = products.filter((product) => product.enabled && Number(product.stock) <= 0).length;
   const disabled = products.filter((product) => !product.enabled).length;
 
   return (
@@ -1029,7 +975,7 @@ function ProductsPage({ currentMachine, machineId, machines, products, setMachin
 
       <section className="inventory-summary">
         <MetricCard icon={Box} label="Tổng tồn kho" value={totalStock} hint={`${products.length} slot sản phẩm`} tone="blue" />
-        <MetricCard icon={AlertTriangle} label="Sản phẩm hết hàng" value={lowStock} hint="Slot hết hoặc sắp hết hàng" tone="orange" />
+        <MetricCard icon={AlertTriangle} label="Sản phẩm hết hàng" value={outOfStock} hint="Slot có tồn kho bằng 0" tone="orange" />
         <MetricCard icon={Settings} label="Slot đang tắt" value={disabled} hint="Không bán trên máy" tone="teal" />
       </section>
 
@@ -1090,6 +1036,28 @@ function ProductsPage({ currentMachine, machineId, machines, products, setMachin
 }
 
 function MoneyPage({ currentMachine, moneyEvents }) {
+  const machineName = displayMachineName(currentMachine || moneyEvents[0]?.machine_id);
+  const receivedRows = moneyEvents.map((event) => ({
+    ...event,
+    transactionType: "in",
+    transactionLabel: "Tiền nhận",
+    machineName: displayMachineName(event.machine_id || currentMachine),
+  }));
+  const refundedAmount = Number(currentMachine?.total_refunded || 0);
+  const refundRows = refundedAmount
+    ? [
+        {
+          id: `refund-${currentMachine?.id || "machine"}`,
+          created_at: currentMachine?.updated_at || currentMachine?.last_seen_at,
+          amount: refundedAmount,
+          transactionType: "out",
+          transactionLabel: "Tiền ra",
+          machineName,
+        },
+      ]
+    : [];
+  const transactionRows = [...receivedRows, ...refundRows].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+
   return (
     <section className="stack">
       <section className="metric-grid compact-grid">
@@ -1098,14 +1066,21 @@ function MoneyPage({ currentMachine, moneyEvents }) {
         <MetricCard icon={CreditCard} label="Tiền đang có" value={money(currentMachine?.current_credit)} tone="green" />
       </section>
       <DataTable
-        title="Sự kiện nhận tiền"
-        rows={moneyEvents}
+        title="Lịch sử giao dịch"
+        rows={transactionRows}
         columns={[
           ["created_at", "Thời gian", (row) => time(row.created_at)],
-          ["amount", "Mệnh giá", (row) => money(row.amount)],
-          ["source", "Nguồn", (row) => row.source],
-          ["raw_label", "Nhãn", (row) => row.raw_label || "-"],
-          ["confidence", "Độ tin cậy", (row) => row.confidence || "-"],
+          [
+            "amount",
+            "Giao dịch",
+            (row) => (
+              <span className={`transaction-amount transaction-${row.transactionType}`}>
+                {row.transactionType === "out" ? "-" : "+"} {money(row.amount)}
+              </span>
+            ),
+          ],
+          ["transactionLabel", "Loại", (row) => row.transactionLabel],
+          ["machineName", "Nguồn", (row) => row.machineName],
         ]}
       />
     </section>

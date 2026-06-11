@@ -832,6 +832,22 @@ select:focus {
   align-self: end;
 }
 
+.transaction-amount {
+  display: inline-flex;
+  align-items: center;
+  min-width: 104px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.transaction-in {
+  color: #079455;
+}
+
+.transaction-out {
+  color: #d92d20;
+}
+
 .table-wrap {
   width: 100%;
   overflow-x: auto;
