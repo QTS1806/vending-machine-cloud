@@ -17,7 +17,7 @@ import {
   Trash2,
   TrendingUp,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -164,6 +164,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [newMachineId, setNewMachineId] = useState("vending-002");
+  const offlineLoggedRef = useRef(new Set());
 
   const currentMachine = machines.find((item) => item.id === machineId);
 
@@ -200,29 +201,53 @@ export default function App() {
       });
     }
 
+    const eventAlerts = events
+      .filter((event) => event.severity === "error" || event.severity === "warning")
+      .slice(0, 5);
+    for (const event of eventAlerts) {
+      alerts.push({
+        tone: event.severity === "error" ? "danger" : "warning",
+        title: event.event_type === "motor_timeout" ? "Động cơ quay quá lâu" : "Cảnh báo máy",
+        text: event.message || time(event.created_at),
+      });
+    }
+
     const activity = [
-      ...sales.slice(0, 3).map((sale) => ({
+      ...sales.map((sale) => ({
         id: `sale-${sale.id}`,
         icon: ShoppingCart,
         tone: "success",
         title: `Bán SP${sale.product_slot} - ${money(sale.unit_price)}`,
         text: time(sale.created_at),
+        created_at: sale.created_at,
       })),
-      ...moneyEvents.slice(0, 3).map((item) => ({
+      ...moneyEvents.map((item) => ({
         id: `money-${item.id}`,
         icon: Banknote,
         tone: "blue",
         title: `Nhận ${money(item.amount)}`,
         text: time(item.created_at),
+        created_at: item.created_at,
       })),
-      ...commands.slice(0, 2).map((command) => ({
+      ...commands.map((command) => ({
         id: `command-${command.id}`,
         icon: Settings,
         tone: command.status === "error" ? "danger" : "neutral",
         title: `Lệnh ${command.command_type}`,
         text: command.status,
+        created_at: command.created_at,
       })),
-    ].slice(0, 6);
+      ...events.map((event) => ({
+        id: `event-${event.id}`,
+        icon: event.severity === "error" || event.severity === "warning" ? AlertCircle : ListChecks,
+        tone: event.severity === "error" ? "danger" : event.severity === "warning" ? "warning" : "neutral",
+        title: event.message || event.event_type,
+        text: time(event.created_at),
+        created_at: event.created_at,
+      })),
+    ]
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+      .slice(0, 20);
 
     return {
       activity,
@@ -236,7 +261,7 @@ export default function App() {
       soldToday: todaySales.length,
       topProduct,
     };
-  }, [commands, currentMachine, machineId, machines, moneyEvents, products, sales]);
+  }, [commands, currentMachine, events, machineId, machines, moneyEvents, products, sales]);
 
   const loadData = useCallback(async () => {
     if (!supabase) return;
@@ -349,6 +374,16 @@ export default function App() {
         { event: "INSERT", schema: "public", table: "money_events", filter: `machine_id=eq.${machineId}` },
         loadData,
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "machine_commands", filter: `machine_id=eq.${machineId}` },
+        loadData,
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "machine_events", filter: `machine_id=eq.${machineId}` },
+        loadData,
+      )
       .subscribe();
 
     return () => {
@@ -356,6 +391,31 @@ export default function App() {
       supabase.removeChannel(channel);
     };
   }, [machineId, loadData]);
+
+  useEffect(() => {
+    if (!supabase || !currentMachine?.id || !currentMachine.last_seen_at) return;
+    if (machineTone(currentMachine) === "success") return;
+
+    const lastSeen = new Date(currentMachine.last_seen_at).getTime();
+    const alreadyLogged = events.some(
+      (event) =>
+        event.event_type === "offline_detected" &&
+        new Date(event.created_at).getTime() > lastSeen,
+    );
+    const key = `${currentMachine.id}:${currentMachine.last_seen_at}`;
+    if (alreadyLogged || offlineLoggedRef.current.has(key)) return;
+
+    offlineLoggedRef.current.add(key);
+    supabase
+      .from("machine_events")
+      .insert({
+        machine_id: currentMachine.id,
+        event_type: "offline_detected",
+        severity: "warning",
+        message: `Không thấy tín hiệu từ ${ageText(currentMachine.last_seen_at)}.`,
+      })
+      .then(() => loadData());
+  }, [currentMachine, events, loadData]);
 
   useEffect(() => {
     if (!notice && !error) return undefined;
@@ -679,7 +739,7 @@ export default function App() {
           )}
 
           {activeTab === "money" && (
-            <MoneyPage currentMachine={currentMachine} moneyEvents={moneyEvents} />
+            <MoneyPage currentMachine={currentMachine} moneyEvents={moneyEvents} events={events} />
           )}
 
           {activeTab === "alerts" && (
@@ -805,7 +865,7 @@ function MachineTable({ machines, selectedId, onSelect }) {
       <div className="machine-table-head">
         <span>Mã máy</span>
         <span>Trạng thái</span>
-        <span>Tồn kho</span>
+        <span>Số dư</span>
         <span>Doanh thu</span>
         <span>Kết nối</span>
       </div>
@@ -818,7 +878,7 @@ function MachineTable({ machines, selectedId, onSelect }) {
               <small>{machine.id}</small>
             </span>
             <Pill tone={tone}>{machineStatusLabel(machine)}</Pill>
-            <span>{money(machine.cash_in_box)}</span>
+            <span>{money(machine.current_credit)}</span>
             <span>{money(machine.total_revenue)}</span>
             <span className={`connection-dot connection-dot-${tone}`} />
           </button>
@@ -1042,7 +1102,7 @@ function ProductsPage({ currentMachine, machineId, machines, products, setMachin
   );
 }
 
-function MoneyPage({ currentMachine, moneyEvents }) {
+function MoneyPage({ currentMachine, moneyEvents, events }) {
   const machineName = displayMachineName(currentMachine || moneyEvents[0]?.machine_id);
   const receivedRows = moneyEvents.map((event) => ({
     ...event,
@@ -1051,7 +1111,18 @@ function MoneyPage({ currentMachine, moneyEvents }) {
     machineName: displayMachineName(event.machine_id || currentMachine),
   }));
   const refundedAmount = Number(currentMachine?.total_refunded || 0);
-  const refundRows = refundedAmount
+  const refundEventRows = events
+    .filter((event) => event.event_type === "refund")
+    .map((event) => ({
+      id: `refund-event-${event.id}`,
+      created_at: event.created_at,
+      amount: Number(event.payload?.amount || 0),
+      transactionType: "out",
+      transactionLabel: "Tiền ra",
+      machineName,
+    }))
+    .filter((event) => event.amount > 0);
+  const refundRows = !refundEventRows.length && refundedAmount
     ? [
         {
           id: `refund-${currentMachine?.id || "machine"}`,
@@ -1063,7 +1134,7 @@ function MoneyPage({ currentMachine, moneyEvents }) {
         },
       ]
     : [];
-  const transactionRows = [...receivedRows, ...refundRows].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  const transactionRows = [...receivedRows, ...refundEventRows, ...refundRows].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 
   return (
     <section className="stack">

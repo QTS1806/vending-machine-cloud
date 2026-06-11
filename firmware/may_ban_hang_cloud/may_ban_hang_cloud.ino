@@ -150,6 +150,12 @@ volatile long giaCanGuiCloud = 0;
 volatile long tienTruocCanGuiCloud = 0;
 volatile long tienSauCanGuiCloud = 0;
 volatile bool coSanPhamCanGuiCloud[5] = {false, false, false, false, false};
+volatile bool coEventCanGuiCloud = false;
+String eventTypeCanGuiCloud = "";
+String eventSeverityCanGuiCloud = "info";
+String eventMessageCanGuiCloud = "";
+long eventAmountCanGuiCloud = -1;
+int eventSlotCanGuiCloud = 0;
 
 TaskHandle_t cloudTaskHandle = nullptr;
 
@@ -157,6 +163,9 @@ void cloudTask(void *parameter);
 void xuLyCloud(unsigned long now);
 void queueProductCloudSync(int sp);
 bool cloudSendPendingProductSync();
+void queueCloudEvent(const String &eventType, const String &severity, const String &message, long amount = -1, int slot = 0);
+bool cloudLogEvent(const String &eventType, const String &severity, const String &message, long amount = -1, int slot = 0);
+bool cloudSendPendingEvent();
 void hoanTienChoKhach();
 
 void setup()
@@ -430,7 +439,10 @@ void cloudBootstrap()
 
   String body;
   serializeJson(machine, body);
-  cloudRequest("POST", "machines?on_conflict=id", body, nullptr, "resolution=merge-duplicates,return=minimal");
+  if (cloudRequest("POST", "machines?on_conflict=id", body, nullptr, "resolution=merge-duplicates,return=minimal"))
+  {
+    cloudLogEvent("machine_online", "info", "Máy đã bật và kết nối cloud");
+  }
 }
 
 void xuLyCloud(unsigned long now)
@@ -488,6 +500,11 @@ void xuLyCloud(unsigned long now)
     return;
   }
 
+  if (cloudSendPendingEvent())
+  {
+    return;
+  }
+
   if (now - mocCloudHeartbeat >= CLOUD_HEARTBEAT_MS || mocCloudHeartbeat == 0)
   {
     mocCloudHeartbeat = now;
@@ -536,7 +553,7 @@ void cloudHeartbeat(const String &status)
 
 void cloudUpsertProduct(int sp)
 {
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<384> doc;
   doc["machine_id"] = MACHINE_ID;
   doc["slot"] = sp;
   doc["name"] = String("Sản phẩm ") + String(sp);
@@ -669,7 +686,7 @@ bool cloudSendPendingSale()
   Serial.print("#CLOUD_SEND:SALE SP");
   Serial.println(spCanGuiCloud);
 
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<384> doc;
   doc["machine_id"] = MACHINE_ID;
   doc["product_slot"] = spCanGuiCloud;
   doc["product_name"] = String("Sản phẩm ") + String(spCanGuiCloud);
@@ -690,22 +707,65 @@ bool cloudSendPendingSale()
   return true;
 }
 
-void cloudLogEvent(const String &eventType, const String &severity, const String &message)
+void queueCloudEvent(const String &eventType, const String &severity, const String &message, long amount, int slot)
 {
   if (!CLOUD_ENABLED)
   {
     return;
   }
 
-  StaticJsonDocument<256> doc;
+  eventTypeCanGuiCloud = eventType;
+  eventSeverityCanGuiCloud = severity;
+  eventMessageCanGuiCloud = message;
+  eventAmountCanGuiCloud = amount;
+  eventSlotCanGuiCloud = slot;
+  coEventCanGuiCloud = true;
+}
+
+bool cloudSendPendingEvent()
+{
+  if (!coEventCanGuiCloud)
+  {
+    return false;
+  }
+
+  if (cloudLogEvent(eventTypeCanGuiCloud, eventSeverityCanGuiCloud, eventMessageCanGuiCloud, eventAmountCanGuiCloud, eventSlotCanGuiCloud))
+  {
+    coEventCanGuiCloud = false;
+    return true;
+  }
+
+  return true;
+}
+
+bool cloudLogEvent(const String &eventType, const String &severity, const String &message, long amount, int slot)
+{
+  if (!CLOUD_ENABLED)
+  {
+    return false;
+  }
+
+  StaticJsonDocument<384> doc;
   doc["machine_id"] = MACHINE_ID;
   doc["event_type"] = eventType;
   doc["severity"] = severity;
   doc["message"] = message;
+  if (amount >= 0 || slot > 0)
+  {
+    JsonObject payload = doc.createNestedObject("payload");
+    if (amount >= 0)
+    {
+      payload["amount"] = amount;
+    }
+    if (slot > 0)
+    {
+      payload["slot"] = slot;
+    }
+  }
 
   String body;
   serializeJson(doc, body);
-  cloudRequest("POST", "machine_events", body, nullptr, "return=minimal");
+  return cloudRequest("POST", "machine_events", body, nullptr, "return=minimal");
 }
 
 void cloudPollCommands()
@@ -1310,6 +1370,7 @@ void hoanTienChoKhach()
     tongTienDaTraLai += tienTraLai;
     Serial.print("#CLOUD_QUEUE:REFUND ");
     Serial.println(tienTraLai);
+    queueCloudEvent("refund", "info", "Hoàn tiền cho khách", tienTraLai);
   }
 
   tienDangCo = 0;
@@ -1486,6 +1547,7 @@ void baoLoiBanHang(String dong1, String dong2)
 {
   tatTatCaRelay();
   showMessage(dong1, dong2);
+  queueCloudEvent("motor_timeout", "error", String("Động cơ quay quá lâu tại SP") + String(sanPhamDangBan), -1, sanPhamDangBan);
   doiTrangThaiBanHang(BAN_HANG_LOI, millis());
 }
 
