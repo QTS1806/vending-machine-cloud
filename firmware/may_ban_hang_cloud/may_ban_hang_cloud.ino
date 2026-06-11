@@ -122,6 +122,7 @@ bool dangDoiTienVe = false;
 bool daRoiKhoiCamBienMotor = false;
 bool daBaoGioiHanTien = false;
 bool daCloudBootstrap = false;
+bool daTaiTrangThaiMayTuCloud = false;
 bool daTaiCauHinhTuCloud = false;
 int soLoiCloudLienTiep = 0;
 wl_status_t trangThaiWifiCu = WL_IDLE_STATUS;
@@ -163,6 +164,8 @@ TaskHandle_t cloudTaskHandle = nullptr;
 void cloudTask(void *parameter);
 void xuLyCloud(unsigned long now);
 bool coDuLieuLocalChoGuiCloud();
+bool cloudBootstrap();
+bool cloudFetchMachineStateFromWeb();
 bool cloudFetchProductsFromWeb();
 void cloudUpsertProduct(int sp);
 void queueProductCloudSync(int sp);
@@ -423,11 +426,20 @@ void logWifiStatusNeuCan(unsigned long now)
   }
 }
 
-void cloudBootstrap()
+bool cloudBootstrap()
 {
   if (WiFi.status() != WL_CONNECTED)
   {
-    return;
+    return false;
+  }
+
+  if (!daTaiTrangThaiMayTuCloud && !coDuLieuLocalChoGuiCloud())
+  {
+    daTaiTrangThaiMayTuCloud = cloudFetchMachineStateFromWeb();
+    if (!daTaiTrangThaiMayTuCloud)
+    {
+      return false;
+    }
   }
 
   if (!daTaiCauHinhTuCloud && !coDuLieuLocalChoGuiCloud())
@@ -449,10 +461,13 @@ void cloudBootstrap()
 
   String body;
   serializeJson(machine, body);
-  if (cloudRequest("POST", "machines?on_conflict=id", body, nullptr, "resolution=merge-duplicates,return=minimal"))
+  bool ok = cloudRequest("POST", "machines?on_conflict=id", body, nullptr, "resolution=merge-duplicates,return=minimal");
+  if (ok)
   {
     cloudLogEvent("machine_online", "info", "Máy đã bật và kết nối cloud");
   }
+
+  return ok;
 }
 
 bool coDuLieuLocalChoGuiCloud()
@@ -471,6 +486,73 @@ bool coDuLieuLocalChoGuiCloud()
   }
 
   return false;
+}
+
+bool cloudFetchMachineStateFromWeb()
+{
+  String response;
+  String path = String("machines?select=current_credit,cash_in_box,total_sales,total_revenue,total_refunded")
+                + "&id=eq." + MACHINE_ID
+                + "&limit=1";
+
+  if (!cloudRequest("GET", path, "", &response))
+  {
+    return false;
+  }
+
+  DynamicJsonDocument doc(1024);
+  DeserializationError error = deserializeJson(doc, response);
+  if (error || !doc.is<JsonArray>())
+  {
+    Serial.println("#CLOUD_MACHINE_STATE:PARSE_FAIL");
+    return false;
+  }
+
+  JsonArray machines = doc.as<JsonArray>();
+  if (machines.size() == 0)
+  {
+    Serial.println("#CLOUD_MACHINE_STATE:EMPTY");
+    return true;
+  }
+
+  JsonObject machine = machines[0];
+  long cloudCredit = machine["current_credit"] | tienDangCo;
+  long cloudCashInBox = machine["cash_in_box"] | tongTienHopMay;
+  int cloudTotalSales = machine["total_sales"] | tongSanPhamDaBan;
+  long cloudTotalRevenue = machine["total_revenue"] | tongDoanhThuMay;
+  long cloudTotalRefunded = machine["total_refunded"] | tongTienDaTraLai;
+
+  if (cloudCredit < 0)
+  {
+    cloudCredit = 0;
+  }
+  if (cloudCredit > GIOI_HAN_TIEN)
+  {
+    cloudCredit = GIOI_HAN_TIEN;
+  }
+
+  tienDangCo = cloudCredit;
+  if (cloudCashInBox >= 0)
+  {
+    tongTienHopMay = cloudCashInBox;
+  }
+  if (cloudTotalSales >= 0)
+  {
+    tongSanPhamDaBan = cloudTotalSales;
+  }
+  if (cloudTotalRevenue >= 0)
+  {
+    tongDoanhThuMay = cloudTotalRevenue;
+  }
+  if (cloudTotalRefunded >= 0)
+  {
+    tongTienDaTraLai = cloudTotalRefunded;
+  }
+
+  Serial.print("#CLOUD_MACHINE_STATE:APPLIED:");
+  Serial.println(tienDangCo);
+  showHome();
+  return true;
 }
 
 bool cloudFetchProductsFromWeb()
@@ -548,12 +630,11 @@ void xuLyCloud(unsigned long now)
 
   if (!daCloudBootstrap)
   {
-    daCloudBootstrap = true;
     Serial.print("#WIFI:IP:");
     Serial.println(WiFi.localIP());
     Serial.print("#HEAP:");
     Serial.println(ESP.getFreeHeap());
-    cloudBootstrap();
+    daCloudBootstrap = cloudBootstrap();
     return;
   }
 
@@ -579,6 +660,15 @@ void xuLyCloud(unsigned long now)
   if (cloudSendPendingEvent())
   {
     return;
+  }
+
+  if (!daTaiTrangThaiMayTuCloud && !coDuLieuLocalChoGuiCloud())
+  {
+    if (trangThaiTien == TIEN_CHO && trangThaiBanHang == BAN_HANG_CHO && now - mocHoatDongLocal >= CLOUD_IDLE_MS)
+    {
+      daTaiTrangThaiMayTuCloud = cloudFetchMachineStateFromWeb();
+      return;
+    }
   }
 
   if (now - mocCloudHeartbeat >= CLOUD_HEARTBEAT_MS || mocCloudHeartbeat == 0)
