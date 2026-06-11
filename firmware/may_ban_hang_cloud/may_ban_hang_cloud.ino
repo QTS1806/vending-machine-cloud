@@ -151,6 +151,7 @@ volatile int spCanGuiCloud = 0;
 volatile long giaCanGuiCloud = 0;
 volatile long tienTruocCanGuiCloud = 0;
 volatile long tienSauCanGuiCloud = 0;
+String thongBaoBanHangCanGuiCloud = "Bán hàng thành công";
 volatile bool coSanPhamCanGuiCloud[5] = {false, false, false, false, false};
 volatile bool coEventCanGuiCloud = false;
 String eventTypeCanGuiCloud = "";
@@ -174,7 +175,9 @@ void queueCloudEvent(const String &eventType, const String &severity, const Stri
 bool cloudLogEvent(const String &eventType, const String &severity, const String &message, long amount = -1, int slot = 0);
 bool cloudSendPendingEvent();
 bool cloudApplyProductPayload(JsonVariant payload);
+void cloudSaleSuccess(int sp, long price, long creditBefore, long creditAfter, const String &saleMessage);
 void hoanTienChoKhach();
+void ghiNhanBanHangDaTruTien(int sp, const String &saleMessage);
 
 void setup()
 {
@@ -832,7 +835,7 @@ bool cloudSendPendingMoney()
   return true;
 }
 
-void cloudSaleSuccess(int sp, long price, long creditBefore, long creditAfter)
+void cloudSaleSuccess(int sp, long price, long creditBefore, long creditAfter, const String &saleMessage)
 {
   if (!CLOUD_ENABLED)
   {
@@ -845,6 +848,7 @@ void cloudSaleSuccess(int sp, long price, long creditBefore, long creditAfter)
   giaCanGuiCloud = price;
   tienTruocCanGuiCloud = creditBefore;
   tienSauCanGuiCloud = creditAfter;
+  thongBaoBanHangCanGuiCloud = saleMessage;
   coBanHangCanGuiCloud = true;
   queueProductCloudSync(sp);
   Serial.print("#CLOUD_QUEUE:SALE SP");
@@ -869,7 +873,7 @@ bool cloudSendPendingSale()
   doc["credit_before"] = tienTruocCanGuiCloud;
   doc["credit_after"] = tienSauCanGuiCloud;
   doc["success"] = true;
-  doc["message"] = "Bán hàng thành công";
+  doc["message"] = thongBaoBanHangCanGuiCloud;
 
   String body;
   serializeJson(doc, body);
@@ -1693,34 +1697,49 @@ void xuLyBanHang(unsigned long now)
   }
 }
 
-void banHangThanhCong()
+void ghiNhanBanHangDaTruTien(int sp, const String &saleMessage)
 {
-  int spDaBan = sanPhamDangBan;
-  long giaDaBan = giaSP[spDaBan];
+  if (sp < 1 || sp > soSanPham)
+  {
+    return;
+  }
+
+  long giaDaBan = giaSP[sp];
   long tienTruocKhiBan = tienDangCo;
 
-  tienDangCo -= giaSP[sanPhamDangBan];
+  tienDangCo -= giaDaBan;
   if (tienDangCo < 0)
   {
     tienDangCo = 0;
   }
 
-  if (soLuongSP[sanPhamDangBan] > 0)
+  if (soLuongSP[sp] > 0)
   {
-    soLuongSP[sanPhamDangBan]--;
+    soLuongSP[sp]--;
   }
 
+  cloudSaleSuccess(sp, giaDaBan, tienTruocKhiBan, tienDangCo, saleMessage);
+}
+
+void banHangThanhCong()
+{
+  int spDaBan = sanPhamDangBan;
+
+  ghiNhanBanHangDaTruTien(spDaBan, "Bán hàng thành công");
   showMessage("Da nhan SP", String("Con lai:") + String(tienDangCo));
   doiTrangThaiBanHang(BAN_HANG_XONG, millis());
   Serial.println("Bán hàng thành công");
-  cloudSaleSuccess(spDaBan, giaDaBan, tienTruocKhiBan, tienDangCo);
 }
 
 void baoLoiBanHang(String dong1, String dong2)
 {
+  int spLoi = sanPhamDangBan;
   tatTatCaRelay();
+  ghiNhanBanHangDaTruTien(spLoi, "Đã trừ tiền do động cơ quay quá lâu");
   showMessage(dong1, dong2);
-  queueCloudEvent("motor_timeout", "error", String("Động cơ quay quá lâu tại SP") + String(sanPhamDangBan), -1, sanPhamDangBan);
+  Serial.print("#SALE_CHARGED_ON_MOTOR_TIMEOUT SP");
+  Serial.println(spLoi);
+  queueCloudEvent("motor_timeout", "error", String("Động cơ quay quá lâu tại SP") + String(spLoi), giaSP[spLoi], spLoi);
   doiTrangThaiBanHang(BAN_HANG_LOI, millis());
 }
 
