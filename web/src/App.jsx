@@ -833,27 +833,28 @@ function OverviewPage({ dashboard, machines, products, sales, machineId, setMach
       </section>
 
       <section className="dashboard-grid">
-        <section className="panel machine-table-panel">
-          <div className="panel-heading">
-            <h2>Danh sách máy bán hàng</h2>
-            <span>{machines.length} máy</span>
-          </div>
-          <MachineTable machines={machines} selectedId={machineId} onSelect={setMachineId} />
+        <section className="overview-left-stack">
+          <section className="panel machine-table-panel">
+            <div className="panel-heading">
+              <h2>Danh sách máy bán hàng</h2>
+              <span>{machines.length} máy</span>
+            </div>
+            <MachineTable machines={machines} selectedId={machineId} onSelect={setMachineId} />
+          </section>
+
+          <section className="panel chart-panel">
+            <div className="panel-heading">
+              <h2>Doanh thu 7 ngày</h2>
+              <span>7 ngày qua</span>
+            </div>
+            <RevenueBars sales={sales} />
+          </section>
         </section>
 
         <section className="right-stack">
           <AlertPanel alerts={dashboard.alerts} />
           <ActivityPanel activity={dashboard.activity} />
         </section>
-
-        <section className="panel chart-panel">
-          <div className="panel-heading">
-            <h2>Doanh thu 7 ngày</h2>
-            <span>7 ngày qua</span>
-          </div>
-          <RevenueBars sales={sales} />
-        </section>
-
       </section>
     </>
   );

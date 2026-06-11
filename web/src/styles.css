@@ -370,9 +370,14 @@ h2 {
 }
 
 .right-stack,
+.overview-left-stack,
 .stack {
   display: grid;
   gap: 16px;
+}
+
+.overview-left-stack {
+  align-content: start;
 }
 
 .chart-panel {
