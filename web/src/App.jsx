@@ -960,7 +960,7 @@ function MachineTable({ machines, selectedId, onSelect, machineRevenueToday }) {
 
 function AlertPanel({ alerts, onDismiss }) {
   return (
-    <section className="panel">
+    <section className="panel alert-panel">
       <div className="panel-heading">
         <h2>Cảnh báo</h2>
         <span>{alerts.length || "Ổn định"}</span>

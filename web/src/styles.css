@@ -378,7 +378,7 @@ h2 {
 }
 
 .right-stack {
-  grid-template-rows: auto minmax(320px, 1fr);
+  grid-template-rows: 260px minmax(320px, 1fr);
   height: 100%;
 }
 
@@ -407,6 +407,13 @@ h2 {
   border-radius: 14px;
   background: #ffffff;
   box-shadow: 0 8px 20px rgba(16, 24, 40, 0.045);
+}
+
+.alert-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 260px;
+  min-height: 0;
 }
 
 .machine-table-panel {
@@ -527,14 +534,21 @@ h2 {
 
 .alert-list,
 .activity-list {
-  max-height: min(420px, 48vh);
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
 .activity-list {
+  max-height: min(420px, 48vh);
+}
+
+.activity-list {
   min-height: 300px;
+}
+
+.alert-panel .alert-list {
+  max-height: none;
 }
 
 .alert-card,
@@ -747,9 +761,8 @@ h2 {
   align-items: start;
 }
 
-.alerts-layout .alert-list {
-  max-height: min(300px, 42vh);
-  min-height: 0;
+.alerts-layout .alert-panel {
+  height: 320px;
 }
 
 .alerts-layout .table-wrap {
