@@ -407,7 +407,9 @@ h2 {
 }
 
 .machine-table {
-  overflow-x: auto;
+  max-height: min(520px, 62vh);
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .machine-table-head,
@@ -420,6 +422,9 @@ h2 {
 }
 
 .machine-table-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   min-height: 42px;
   padding: 0 18px;
   color: #667085;
@@ -486,6 +491,13 @@ h2 {
   display: grid;
   gap: 10px;
   padding: 14px 16px 16px;
+}
+
+.alert-list,
+.activity-list {
+  max-height: min(420px, 48vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .alert-card,
@@ -850,7 +862,9 @@ select:focus {
 
 .table-wrap {
   width: 100%;
-  overflow-x: auto;
+  max-height: min(540px, 64vh);
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 table {
@@ -868,6 +882,10 @@ td {
 }
 
 th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #ffffff;
   color: #667085;
   font-size: 0.76rem;
   letter-spacing: 0;
