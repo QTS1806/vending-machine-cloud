@@ -148,17 +148,17 @@ create index if not exists machine_events_machine_created_idx on public.machine_
 create index if not exists machine_commands_machine_status_idx on public.machine_commands(machine_id, status, created_at desc);
 
 insert into public.machines (id, name, location, status, firmware_version)
-values ('vending-001', 'May ban hang 001', 'Phong test', 'offline', 'cloud-0.1')
+values ('vending-001', 'Máy bán hàng 001', 'Phòng test', 'offline', 'cloud-0.1')
 on conflict (id) do update
 set name = excluded.name,
     location = excluded.location;
 
 insert into public.products (machine_id, slot, name, price, stock, capacity, enabled)
 values
-  ('vending-001', 1, 'San pham 1', 10000, 4, 4, true),
-  ('vending-001', 2, 'San pham 2', 10000, 4, 4, true),
-  ('vending-001', 3, 'San pham 3', 10000, 4, 4, true),
-  ('vending-001', 4, 'San pham 4', 10000, 4, 4, true)
+  ('vending-001', 1, 'Sản phẩm 1', 10000, 4, 4, true),
+  ('vending-001', 2, 'Sản phẩm 2', 10000, 4, 4, true),
+  ('vending-001', 3, 'Sản phẩm 3', 10000, 4, 4, true),
+  ('vending-001', 4, 'Sản phẩm 4', 10000, 4, 4, true)
 on conflict (machine_id, slot) do update
 set name = excluded.name,
     price = excluded.price,

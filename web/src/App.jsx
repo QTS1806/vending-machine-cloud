@@ -670,8 +670,7 @@ export default function App() {
               rows={sales}
               columns={[
                 ["created_at", "Thời gian", (row) => time(row.created_at)],
-                ["product_slot", "Slot", (row) => `SP${row.product_slot}`],
-                ["product_name", "Sản phẩm", (row) => row.product_name || "-"],
+                ["product_name", "Sản phẩm", (row) => displayProductName({ name: row.product_name, slot: row.product_slot })],
                 ["unit_price", "Giá", (row) => money(row.unit_price)],
                 ["credit_after", "Tiền còn lại", (row) => money(row.credit_after)],
                 ["success", "Kết quả", (row) => <Pill tone={row.success ? "success" : "danger"}>{row.success ? "OK" : "Lỗi"}</Pill>],

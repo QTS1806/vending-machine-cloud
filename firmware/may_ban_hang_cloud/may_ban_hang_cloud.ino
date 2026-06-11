@@ -21,7 +21,7 @@ const bool DEBUG_KEYS = false;
 #define IR_DAU 14
 #define IR_CUOI 27
 
-// May ban hang
+// Máy bán hàng
 #define RL1 23
 #define RL2 19
 #define RL3 18
@@ -418,8 +418,8 @@ void cloudBootstrap()
 
   StaticJsonDocument<320> machine;
   machine["id"] = MACHINE_ID;
-  machine["name"] = "May ban hang 001";
-  machine["location"] = "Phong test";
+  machine["name"] = "Máy bán hàng 001";
+  machine["location"] = "Phòng test";
   machine["status"] = "online";
   machine["firmware_version"] = FIRMWARE_VERSION;
   machine["current_credit"] = tienDangCo;
@@ -539,7 +539,7 @@ void cloudUpsertProduct(int sp)
   StaticJsonDocument<256> doc;
   doc["machine_id"] = MACHINE_ID;
   doc["slot"] = sp;
-  doc["name"] = String("San pham ") + String(sp);
+  doc["name"] = String("Sản phẩm ") + String(sp);
   doc["price"] = giaSP[sp];
   doc["stock"] = soLuongSP[sp];
   doc["capacity"] = SO_LUONG_MAX;
@@ -672,12 +672,12 @@ bool cloudSendPendingSale()
   StaticJsonDocument<256> doc;
   doc["machine_id"] = MACHINE_ID;
   doc["product_slot"] = spCanGuiCloud;
-  doc["product_name"] = String("San pham ") + String(spCanGuiCloud);
+  doc["product_name"] = String("Sản phẩm ") + String(spCanGuiCloud);
   doc["unit_price"] = giaCanGuiCloud;
   doc["credit_before"] = tienTruocCanGuiCloud;
   doc["credit_after"] = tienSauCanGuiCloud;
   doc["success"] = true;
-  doc["message"] = "Ban hang thanh cong";
+  doc["message"] = "Bán hàng thành công";
 
   String body;
   serializeJson(doc, body);
@@ -1478,7 +1478,7 @@ void banHangThanhCong()
 
   showMessage("Da nhan SP", String("Con lai:") + String(tienDangCo));
   doiTrangThaiBanHang(BAN_HANG_XONG, millis());
-  Serial.println("Ban hang thanh cong");
+  Serial.println("Bán hàng thành công");
   cloudSaleSuccess(spDaBan, giaDaBan, tienTruocKhiBan, tienDangCo);
 }
 
