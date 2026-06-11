@@ -519,6 +519,12 @@ h2 {
   padding: 14px 16px 16px;
 }
 
+.alert-list {
+  align-content: start;
+  align-items: start;
+  grid-auto-rows: max-content;
+}
+
 .alert-list,
 .activity-list {
   max-height: min(420px, 48vh);
