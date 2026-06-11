@@ -175,6 +175,15 @@ export default function App() {
 
   const currentMachine = machines.find((item) => item.id === machineId);
 
+  const machineRevenueToday = useMemo(() => {
+    const revenueMap = new Map();
+    for (const sale of sales) {
+      if (!sale.success || !sale.machine_id || !isToday(sale.created_at)) continue;
+      revenueMap.set(sale.machine_id, (revenueMap.get(sale.machine_id) || 0) + Number(sale.unit_price || 0));
+    }
+    return revenueMap;
+  }, [sales]);
+
   const dashboard = useMemo(() => {
     const successfulSales = sales.filter((sale) => sale.success);
     const todaySales = successfulSales.filter((sale) => isToday(sale.created_at));
@@ -720,6 +729,7 @@ export default function App() {
               machines={machines}
               products={products}
               sales={sales}
+              machineRevenueToday={machineRevenueToday}
               machineId={machineId}
               setMachineId={setMachineId}
             />
@@ -736,6 +746,7 @@ export default function App() {
               deleteCurrentMachine={deleteCurrentMachine}
               saving={saving}
               currentMachine={currentMachine}
+              machineRevenueToday={machineRevenueToday}
             />
           )}
 
@@ -852,7 +863,7 @@ function PageHeader({ activeTab }) {
   );
 }
 
-function OverviewPage({ dashboard, machines, products, sales, machineId, setMachineId }) {
+function OverviewPage({ dashboard, machines, products, sales, machineRevenueToday, machineId, setMachineId }) {
   return (
     <>
       <section className="metric-grid">
@@ -869,7 +880,7 @@ function OverviewPage({ dashboard, machines, products, sales, machineId, setMach
               <h2>Danh sách máy bán hàng</h2>
               <span>{machines.length} máy</span>
             </div>
-            <MachineTable machines={machines} selectedId={machineId} onSelect={setMachineId} />
+            <MachineTable machines={machines} selectedId={machineId} onSelect={setMachineId} machineRevenueToday={machineRevenueToday} />
           </section>
 
           <section className="panel chart-panel">
@@ -890,14 +901,14 @@ function OverviewPage({ dashboard, machines, products, sales, machineId, setMach
   );
 }
 
-function MachineTable({ machines, selectedId, onSelect }) {
+function MachineTable({ machines, selectedId, onSelect, machineRevenueToday }) {
   return (
     <div className="machine-table">
       <div className="machine-table-head">
         <span>Mã máy</span>
         <span>Trạng thái</span>
         <span>Số dư</span>
-        <span>Doanh thu</span>
+        <span>Doanh thu hôm nay</span>
         <span>Kết nối</span>
       </div>
       {machines.map((machine) => {
@@ -910,7 +921,7 @@ function MachineTable({ machines, selectedId, onSelect }) {
             </span>
             <Pill tone={tone}>{machineStatusLabel(machine)}</Pill>
             <span>{money(machine.current_credit)}</span>
-            <span>{money(machine.total_revenue)}</span>
+            <span>{money(machineRevenueToday?.get(machine.id) || 0)}</span>
             <span className={`connection-dot connection-dot-${tone}`} />
           </button>
         );
@@ -1021,7 +1032,7 @@ function RevenueBars({ sales }) {
   );
 }
 
-function MachinesPage({ machines, machineId, setMachineId, newMachineId, setNewMachineId, addMachine, deleteCurrentMachine, saving, currentMachine }) {
+function MachinesPage({ machines, machineId, setMachineId, newMachineId, setNewMachineId, addMachine, deleteCurrentMachine, saving, currentMachine, machineRevenueToday }) {
   return (
     <section className="two-column">
       <section className="panel">
@@ -1029,7 +1040,7 @@ function MachinesPage({ machines, machineId, setMachineId, newMachineId, setNewM
           <h2>Danh sách máy</h2>
           <span>{machines.length} máy</span>
         </div>
-        <MachineTable machines={machines} selectedId={machineId} onSelect={setMachineId} />
+        <MachineTable machines={machines} selectedId={machineId} onSelect={setMachineId} machineRevenueToday={machineRevenueToday} />
       </section>
 
       <section className="panel form-panel">
