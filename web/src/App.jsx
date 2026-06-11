@@ -160,6 +160,7 @@ export default function App() {
   const [machines, setMachines] = useState([]);
   const [machineId, setMachineId] = useState(DEFAULT_MACHINE_ID);
   const [products, setProducts] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
   const [sales, setSales] = useState([]);
   const [moneyEvents, setMoneyEvents] = useState([]);
   const [commands, setCommands] = useState([]);
@@ -180,7 +181,7 @@ export default function App() {
     const todayMoney = moneyEvents.filter((item) => isToday(item.created_at));
     const revenueToday = todaySales.reduce((sum, sale) => sum + Number(sale.unit_price || 0), 0);
     const insertedToday = todayMoney.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const outOfStockProducts = products.filter((item) => item.enabled && Number(item.stock) <= 0);
+    const outOfStockProducts = allProducts.filter((item) => item.enabled && Number(item.stock) <= 0);
     const disabledProducts = products.filter((item) => !item.enabled);
     const pendingCommands = commands.filter((item) => item.status === "pending" || item.status === "sent");
     const onlineMachines = machines.filter((machine) => machineTone(machine) === "success");
@@ -207,10 +208,16 @@ export default function App() {
       });
     }
 
-    const eventAlerts = events
-      .filter((event) => event.severity === "error" || event.severity === "warning")
-      .slice(0, 5);
-    for (const event of eventAlerts) {
+    const seenEventAlertKeys = new Set();
+    for (const event of events.filter((item) => item.severity === "error" || item.severity === "warning")) {
+      const dedupeKey =
+        event.event_type === "offline_detected"
+          ? `${event.machine_id || "unknown"}:offline_detected`
+          : `${event.machine_id || "unknown"}:${event.event_type}:${event.id}`;
+      if (seenEventAlertKeys.has(dedupeKey)) continue;
+      seenEventAlertKeys.add(dedupeKey);
+      if (alerts.length >= outOfStockProducts.length + 5) break;
+
       const eventMachineName = displayMachineWithId(event.machine_id || currentMachine || machineId);
       alerts.push({
         tone: event.severity === "error" ? "danger" : "warning",
@@ -271,7 +278,7 @@ export default function App() {
       soldToday: todaySales.length,
       topProduct,
     };
-  }, [commands, currentMachine, events, machineId, machines, moneyEvents, products, sales]);
+  }, [allProducts, commands, currentMachine, events, machineId, machines, moneyEvents, sales]);
 
   const loadData = useCallback(async () => {
     if (!supabase) return;
@@ -301,7 +308,7 @@ export default function App() {
       setMachineId(selectedId);
     }
 
-    const [productResult, salesResult, moneyResult, commandResult, eventResult] =
+    const [productResult, allProductResult, salesResult, moneyResult, commandResult, eventResult] =
       await Promise.all([
         supabase
           .from("products")
@@ -309,33 +316,35 @@ export default function App() {
           .eq("machine_id", selectedId)
           .order("slot", { ascending: true }),
         supabase
+          .from("products")
+          .select("*")
+          .order("machine_id", { ascending: true })
+          .order("slot", { ascending: true }),
+        supabase
           .from("sales")
           .select("*")
-          .eq("machine_id", selectedId)
           .order("created_at", { ascending: false })
           .limit(150),
         supabase
           .from("money_events")
           .select("*")
-          .eq("machine_id", selectedId)
           .order("created_at", { ascending: false })
           .limit(150),
         supabase
           .from("machine_commands")
           .select("*")
-          .eq("machine_id", selectedId)
           .order("created_at", { ascending: false })
           .limit(80),
         supabase
           .from("machine_events")
           .select("*")
-          .eq("machine_id", selectedId)
           .order("created_at", { ascending: false })
           .limit(80),
       ]);
 
     const firstError =
       productResult.error ||
+      allProductResult.error ||
       salesResult.error ||
       moneyResult.error ||
       commandResult.error ||
@@ -345,6 +354,7 @@ export default function App() {
       setError(firstError.message);
     } else {
       setProducts(productResult.data || []);
+      setAllProducts(allProductResult.data || []);
       setSales(salesResult.data || []);
       setMoneyEvents(moneyResult.data || []);
       setCommands(commandResult.data || []);
@@ -363,35 +373,35 @@ export default function App() {
 
     const timer = window.setInterval(loadData, 6000);
     const channel = supabase
-      .channel(`vending_${machineId}`)
+      .channel("vending_global")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "machines", filter: `id=eq.${machineId}` },
+        { event: "*", schema: "public", table: "machines" },
         loadData,
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "products", filter: `machine_id=eq.${machineId}` },
+        { event: "*", schema: "public", table: "products" },
         loadData,
       )
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "sales", filter: `machine_id=eq.${machineId}` },
+        { event: "INSERT", schema: "public", table: "sales" },
         loadData,
       )
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "money_events", filter: `machine_id=eq.${machineId}` },
+        { event: "INSERT", schema: "public", table: "money_events" },
         loadData,
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "machine_commands", filter: `machine_id=eq.${machineId}` },
+        { event: "*", schema: "public", table: "machine_commands" },
         loadData,
       )
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "machine_events", filter: `machine_id=eq.${machineId}` },
+        { event: "INSERT", schema: "public", table: "machine_events" },
         loadData,
       )
       .subscribe();
@@ -403,29 +413,37 @@ export default function App() {
   }, [machineId, loadData]);
 
   useEffect(() => {
-    if (!supabase || !currentMachine?.id || !currentMachine.last_seen_at) return;
-    if (machineTone(currentMachine) === "success") return;
+    if (!supabase || !machines.length) return;
 
-    const lastSeen = new Date(currentMachine.last_seen_at).getTime();
-    const alreadyLogged = events.some(
-      (event) =>
-        event.event_type === "offline_detected" &&
-        new Date(event.created_at).getTime() > lastSeen,
-    );
-    const key = `${currentMachine.id}:${currentMachine.last_seen_at}`;
-    if (alreadyLogged || offlineLoggedRef.current.has(key)) return;
-
-    offlineLoggedRef.current.add(key);
-    supabase
-      .from("machine_events")
-      .insert({
-        machine_id: currentMachine.id,
+    const offlineEvents = machines
+      .filter((machine) => machine?.id && machine.last_seen_at && machineTone(machine) !== "success")
+      .filter((machine) => {
+        const lastSeen = new Date(machine.last_seen_at).getTime();
+        const alreadyLogged = events.some(
+          (event) =>
+            event.machine_id === machine.id &&
+            event.event_type === "offline_detected" &&
+            new Date(event.created_at).getTime() > lastSeen,
+        );
+        const key = `${machine.id}:${machine.last_seen_at}`;
+        if (alreadyLogged || offlineLoggedRef.current.has(key)) return false;
+        offlineLoggedRef.current.add(key);
+        return true;
+      })
+      .map((machine) => ({
+        machine_id: machine.id,
         event_type: "offline_detected",
         severity: "warning",
-        message: `Không tìm thấy tín hiệu từ ${displayMachineWithId(currentMachine)} trong ${ageText(currentMachine.last_seen_at)}.`,
-      })
+        message: `Không tìm thấy tín hiệu từ ${displayMachineWithId(machine)} trong ${ageText(machine.last_seen_at)}.`,
+      }));
+
+    if (!offlineEvents.length) return;
+
+    supabase
+      .from("machine_events")
+      .insert(offlineEvents)
       .then(() => loadData());
-  }, [currentMachine, events, loadData]);
+  }, [events, loadData, machines]);
 
   useEffect(() => {
     if (!notice && !error) return undefined;
@@ -750,7 +768,7 @@ export default function App() {
           )}
 
           {activeTab === "money" && (
-            <MoneyPage currentMachine={currentMachine} moneyEvents={moneyEvents} events={events} />
+            <MoneyPage currentMachine={currentMachine} machines={machines} moneyEvents={moneyEvents} events={events} />
           )}
 
           {activeTab === "alerts" && (
@@ -1115,15 +1133,16 @@ function ProductsPage({ currentMachine, machineId, machines, products, setMachin
   );
 }
 
-function MoneyPage({ currentMachine, moneyEvents, events }) {
-  const machineName = displayMachineName(currentMachine || moneyEvents[0]?.machine_id);
+function MoneyPage({ currentMachine, machines, moneyEvents, events }) {
+  const machineLookup = new Map(machines.map((machine) => [machine.id, machine]));
+  const machineFor = (machineId) => machineLookup.get(machineId) || machineId || currentMachine;
   const receivedRows = moneyEvents.map((event) => ({
     ...event,
     transactionType: "in",
     transactionLabel: "Tiền nhận",
-    machineName: displayMachineName(event.machine_id || currentMachine),
+    machineName: displayMachineName(machineFor(event.machine_id)),
   }));
-  const refundedAmount = Number(currentMachine?.total_refunded || 0);
+  const refundedAmount = machines.reduce((sum, machine) => sum + Number(machine.total_refunded || 0), 0);
   const refundEventRows = events
     .filter((event) => event.event_type === "refund")
     .map((event) => ({
@@ -1132,7 +1151,7 @@ function MoneyPage({ currentMachine, moneyEvents, events }) {
       amount: Number(event.payload?.amount || 0),
       transactionType: "out",
       transactionLabel: "Tiền ra",
-      machineName,
+      machineName: displayMachineName(machineFor(event.machine_id)),
     }))
     .filter((event) => event.amount > 0);
   const refundEventTotal = refundEventRows.reduce((sum, event) => sum + Number(event.amount || 0), 0);
@@ -1145,7 +1164,7 @@ function MoneyPage({ currentMachine, moneyEvents, events }) {
           amount: displayedRefundedAmount,
           transactionType: "out",
           transactionLabel: "Tiền ra",
-          machineName,
+          machineName: "Tất cả máy",
         },
       ]
     : [];
@@ -1154,7 +1173,7 @@ function MoneyPage({ currentMachine, moneyEvents, events }) {
   return (
     <section className="stack">
       <section className="metric-grid compact-grid">
-        <MetricCard icon={Banknote} label="Tiền đã nhận" value={money(currentMachine?.cash_in_box)} tone="blue" />
+        <MetricCard icon={Banknote} label="Tiền đã nhận" value={money(machines.reduce((sum, machine) => sum + Number(machine.cash_in_box || 0), 0))} tone="blue" />
         <MetricCard icon={Coins} label="Tiền đã trả lại" value={money(displayedRefundedAmount)} tone="orange" />
       </section>
       <DataTable
