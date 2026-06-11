@@ -333,12 +333,12 @@ export default function App() {
           .from("sales")
           .select("*")
           .order("created_at", { ascending: false })
-          .limit(150),
+          .limit(1000),
         supabase
           .from("money_events")
           .select("*")
           .order("created_at", { ascending: false })
-          .limit(150),
+          .limit(1000),
         supabase
           .from("machine_commands")
           .select("*")
@@ -348,7 +348,7 @@ export default function App() {
           .from("machine_events")
           .select("*")
           .order("created_at", { ascending: false })
-          .limit(80),
+          .limit(1000),
       ]);
 
     const firstError =
@@ -1153,6 +1153,9 @@ function MoneyPage({ currentMachine, machines, moneyEvents, events }) {
     transactionLabel: "Tiền nhận",
     machineName: displayMachineName(machineFor(event.machine_id)),
   }));
+  const receivedEventTotal = receivedRows.reduce((sum, event) => sum + Number(event.amount || 0), 0);
+  const machineCashTotal = machines.reduce((sum, machine) => sum + Number(machine.cash_in_box || 0), 0);
+  const displayedReceivedAmount = Math.max(receivedEventTotal, machineCashTotal);
   const refundedAmount = machines.reduce((sum, machine) => sum + Number(machine.total_refunded || 0), 0);
   const refundEventRows = events
     .filter((event) => event.event_type === "refund")
@@ -1184,7 +1187,7 @@ function MoneyPage({ currentMachine, machines, moneyEvents, events }) {
   return (
     <section className="stack">
       <section className="metric-grid compact-grid">
-        <MetricCard icon={Banknote} label="Tiền đã nhận" value={money(machines.reduce((sum, machine) => sum + Number(machine.cash_in_box || 0), 0))} tone="blue" />
+        <MetricCard icon={Banknote} label="Tiền đã nhận" value={money(displayedReceivedAmount)} tone="blue" />
         <MetricCard icon={Coins} label="Tiền đã trả lại" value={money(displayedRefundedAmount)} tone="orange" />
       </section>
       <DataTable
