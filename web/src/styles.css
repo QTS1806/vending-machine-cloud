@@ -366,6 +366,7 @@ h2 {
 .dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.95fr);
+  align-items: stretch;
   gap: 16px;
 }
 
@@ -373,6 +374,19 @@ h2 {
 .stack {
   display: grid;
   gap: 16px;
+}
+
+.right-stack {
+  grid-row: span 2;
+  grid-template-rows: minmax(0, auto) minmax(0, 1fr);
+}
+
+.right-stack > .panel {
+  min-height: 0;
+}
+
+.right-stack .activity-list {
+  max-height: none;
 }
 
 .chart-panel {
@@ -1011,6 +1025,15 @@ code {
   .dashboard-grid,
   .two-column {
     grid-template-columns: 1fr;
+  }
+
+  .right-stack {
+    grid-row: auto;
+    grid-template-rows: none;
+  }
+
+  .right-stack .activity-list {
+    max-height: min(420px, 48vh);
   }
 }
 
