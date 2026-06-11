@@ -366,6 +366,7 @@ h2 {
 .dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.95fr);
+  align-items: stretch;
   gap: 16px;
 }
 
@@ -377,7 +378,9 @@ h2 {
 }
 
 .overview-left-stack {
-  align-content: start;
+  align-content: stretch;
+  grid-template-rows: minmax(420px, 1fr) auto;
+  height: 100%;
 }
 
 .chart-panel {
@@ -393,6 +396,12 @@ h2 {
   border-radius: 14px;
   background: #ffffff;
   box-shadow: 0 8px 20px rgba(16, 24, 40, 0.045);
+}
+
+.machine-table-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 420px;
 }
 
 .panel-heading {
@@ -412,7 +421,8 @@ h2 {
 }
 
 .machine-table {
-  max-height: min(360px, 44vh);
+  height: 100%;
+  max-height: min(560px, 58vh);
   overflow: auto;
   overscroll-behavior: contain;
 }
@@ -1016,6 +1026,15 @@ code {
   .dashboard-grid,
   .two-column {
     grid-template-columns: 1fr;
+  }
+
+  .overview-left-stack {
+    grid-template-rows: none;
+    height: auto;
+  }
+
+  .machine-table-panel {
+    min-height: 0;
   }
 
 }

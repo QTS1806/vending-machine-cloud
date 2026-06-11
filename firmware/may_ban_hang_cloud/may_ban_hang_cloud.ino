@@ -732,10 +732,11 @@ bool cloudSendPendingEvent()
   if (cloudLogEvent(eventTypeCanGuiCloud, eventSeverityCanGuiCloud, eventMessageCanGuiCloud, eventAmountCanGuiCloud, eventSlotCanGuiCloud))
   {
     coEventCanGuiCloud = false;
+    mocCloudHeartbeat = 0;
     return true;
   }
 
-  return true;
+  return false;
 }
 
 bool cloudLogEvent(const String &eventType, const String &severity, const String &message, long amount, int slot)

@@ -125,6 +125,12 @@ function displayMachineName(machineOrId) {
   return `Máy bán hàng ${machineNumber(id)}`;
 }
 
+function displayMachineWithId(machineOrId) {
+  const id = typeof machineOrId === "string" ? machineOrId : machineOrId?.id;
+  if (!id) return "-";
+  return `${displayMachineName(machineOrId)} (${id})`;
+}
+
 function displayProductName(product) {
   const name = String(product?.name || "").trim();
   if (!name) return `Sản phẩm ${product?.slot || ""}`.trim();
@@ -205,10 +211,14 @@ export default function App() {
       .filter((event) => event.severity === "error" || event.severity === "warning")
       .slice(0, 5);
     for (const event of eventAlerts) {
+      const eventMachineName = displayMachineWithId(event.machine_id || currentMachine || machineId);
       alerts.push({
         tone: event.severity === "error" ? "danger" : "warning",
-        title: event.event_type === "motor_timeout" ? "Động cơ quay quá lâu" : "Cảnh báo máy",
-        text: event.message || time(event.created_at),
+        title: event.event_type === "motor_timeout" ? `${eventMachineName}: Động cơ quay quá lâu` : `Cảnh báo ${eventMachineName}`,
+        text:
+          event.event_type === "offline_detected"
+            ? `Không tìm thấy tín hiệu từ ${eventMachineName}. ${event.message || ""}`.trim()
+            : event.message || time(event.created_at),
       });
     }
 
@@ -217,7 +227,7 @@ export default function App() {
         id: `sale-${sale.id}`,
         icon: ShoppingCart,
         tone: "success",
-        title: `Bán SP${sale.product_slot} - ${money(sale.unit_price)}`,
+        title: `${displayMachineName(sale.machine_id || currentMachine)} bán SP${sale.product_slot} - ${money(sale.unit_price)}`,
         text: time(sale.created_at),
         created_at: sale.created_at,
       })),
@@ -225,7 +235,7 @@ export default function App() {
         id: `money-${item.id}`,
         icon: Banknote,
         tone: "blue",
-        title: `Nhận ${money(item.amount)}`,
+        title: `${displayMachineName(item.machine_id || currentMachine)} nhận ${money(item.amount)}`,
         text: time(item.created_at),
         created_at: item.created_at,
       })),
@@ -233,7 +243,7 @@ export default function App() {
         id: `command-${command.id}`,
         icon: Settings,
         tone: command.status === "error" ? "danger" : "neutral",
-        title: `Lệnh ${command.command_type}`,
+        title: `${displayMachineName(command.machine_id || currentMachine)}: lệnh ${command.command_type}`,
         text: command.status,
         created_at: command.created_at,
       })),
@@ -241,7 +251,7 @@ export default function App() {
         id: `event-${event.id}`,
         icon: event.severity === "error" || event.severity === "warning" ? AlertCircle : ListChecks,
         tone: event.severity === "error" ? "danger" : event.severity === "warning" ? "warning" : "neutral",
-        title: event.message || event.event_type,
+        title: `${displayMachineName(event.machine_id || currentMachine)}: ${event.message || event.event_type}`,
         text: time(event.created_at),
         created_at: event.created_at,
       })),
@@ -412,7 +422,7 @@ export default function App() {
         machine_id: currentMachine.id,
         event_type: "offline_detected",
         severity: "warning",
-        message: `Không thấy tín hiệu từ ${ageText(currentMachine.last_seen_at)}.`,
+        message: `Không tìm thấy tín hiệu từ ${displayMachineWithId(currentMachine)} trong ${ageText(currentMachine.last_seen_at)}.`,
       })
       .then(() => loadData());
   }, [currentMachine, events, loadData]);
@@ -730,6 +740,7 @@ export default function App() {
               rows={sales}
               columns={[
                 ["created_at", "Thời gian", (row) => time(row.created_at)],
+                ["machine_id", "Máy", (row) => displayMachineWithId(row.machine_id || currentMachine)],
                 ["product_name", "Sản phẩm", (row) => displayProductName({ name: row.product_name, slot: row.product_slot })],
                 ["unit_price", "Giá", (row) => money(row.unit_price)],
                 ["credit_after", "Tiền còn lại", (row) => money(row.credit_after)],
@@ -743,7 +754,7 @@ export default function App() {
           )}
 
           {activeTab === "alerts" && (
-            <AlertsPage alerts={dashboard.alerts} events={events} />
+            <AlertsPage alerts={dashboard.alerts} events={events} currentMachine={currentMachine} />
           )}
 
           {activeTab === "commands" && (
@@ -752,6 +763,7 @@ export default function App() {
               rows={commands}
               columns={[
                 ["created_at", "Tạo lúc", (row) => time(row.created_at)],
+                ["machine_id", "Máy", (row) => displayMachineWithId(row.machine_id || currentMachine)],
                 ["command_type", "Lệnh", (row) => row.command_type],
                 ["status", "Trạng thái", (row) => <Pill tone={row.status === "done" ? "success" : row.status === "error" ? "danger" : "warning"}>{row.status}</Pill>],
                 ["payload", "Payload", (row) => JSON.stringify(row.payload)],
@@ -1123,12 +1135,14 @@ function MoneyPage({ currentMachine, moneyEvents, events }) {
       machineName,
     }))
     .filter((event) => event.amount > 0);
-  const refundRows = !refundEventRows.length && refundedAmount
+  const refundEventTotal = refundEventRows.reduce((sum, event) => sum + Number(event.amount || 0), 0);
+  const displayedRefundedAmount = Math.max(refundedAmount, refundEventTotal);
+  const refundRows = !refundEventRows.length && displayedRefundedAmount
     ? [
         {
           id: `refund-${currentMachine?.id || "machine"}`,
           created_at: currentMachine?.updated_at || currentMachine?.last_seen_at,
-          amount: refundedAmount,
+          amount: displayedRefundedAmount,
           transactionType: "out",
           transactionLabel: "Tiền ra",
           machineName,
@@ -1141,7 +1155,7 @@ function MoneyPage({ currentMachine, moneyEvents, events }) {
     <section className="stack">
       <section className="metric-grid compact-grid">
         <MetricCard icon={Banknote} label="Tiền đã nhận" value={money(currentMachine?.cash_in_box)} tone="blue" />
-        <MetricCard icon={Coins} label="Tiền đã trả lại" value={money(currentMachine?.total_refunded)} tone="orange" />
+        <MetricCard icon={Coins} label="Tiền đã trả lại" value={money(displayedRefundedAmount)} tone="orange" />
       </section>
       <DataTable
         title="Lịch sử giao dịch"
@@ -1165,7 +1179,7 @@ function MoneyPage({ currentMachine, moneyEvents, events }) {
   );
 }
 
-function AlertsPage({ alerts, events }) {
+function AlertsPage({ alerts, events, currentMachine }) {
   return (
     <section className="two-column">
       <AlertPanel alerts={alerts} />
@@ -1174,6 +1188,7 @@ function AlertsPage({ alerts, events }) {
         rows={events}
         columns={[
           ["created_at", "Thời gian", (row) => time(row.created_at)],
+          ["machine_id", "Máy", (row) => displayMachineWithId(row.machine_id || currentMachine)],
           ["event_type", "Loại", (row) => row.event_type],
           ["severity", "Mức", (row) => <Pill tone={row.severity === "error" ? "danger" : row.severity === "warning" ? "warning" : "neutral"}>{row.severity}</Pill>],
           ["message", "Nội dung", (row) => row.message || "-"],
