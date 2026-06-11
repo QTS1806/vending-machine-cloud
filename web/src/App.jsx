@@ -1032,7 +1032,7 @@ function ProductsPage({ currentMachine, machineId, machines, products, setMachin
               <footer className="inventory-actions">
                 <button className="primary-button" onClick={() => saveProduct(product)} disabled={saving === `product-${product.slot}`}>
                   <Save size={18} />
-                  <span>{saving === `product-${product.slot}` ? "Đang lưu" : "Lưu slot"}</span>
+                  <span>{saving === `product-${product.slot}` ? "Đang cập nhật" : "Cập nhật sản phẩm"}</span>
                 </button>
               </footer>
             </article>
