@@ -1,5 +1,3 @@
-# PHỤ LỤC C: SOURCE CODE
-
 ## Đề tài
 
 **Hệ thống máy bán hàng tự động sử dụng ESP32, nhận diện tiền bằng YOLO và quản lý từ xa qua Web**
