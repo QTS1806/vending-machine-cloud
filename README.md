@@ -1,147 +1,250 @@
-# Vending Machine Cloud
+# PHỤ LỤC C: SOURCE CODE
 
-Web dashboard for an ESP32 vending machine with Supabase and Vercel.
+## Đề tài
 
-## What It Does
+**Hệ thống máy bán hàng tự động sử dụng ESP32, nhận diện tiền bằng YOLO và quản lý từ xa qua Web**
 
-- Manages multiple vending machines by `machine_id`.
-- Shows sold quantity, revenue, money accepted, stock, and machine heartbeat.
-- Edits product name, price, stock, capacity, and enabled state from the web.
-- Sends commands to ESP32 through Supabase.
-- ESP32 updates Supabase after money is accepted and after a product is sold.
-- Existing Python YOLO app can keep sending `#HOPLE:<amount>` to ESP32 over Serial.
+## Thành viên nhóm
 
-## Project Files
+| Họ và tên | Mã sinh viên |
+| --- | --- |
+| Nguyễn Văn Quân | 22021511 |
+| Nguyễn Bình Minh | 22021504 |
+| Nguyễn Việt Tiến | 22021500 |
 
-- `supabase/schema.sql`: database tables, policies, indexes, seed machine/products.
-- `web`: Vite React dashboard, ready for Vercel.
-- `firmware/may_ban_hang_cloud.ino`: ESP32 firmware based on your current vending code.
-- `python/README.md`: optional Python YOLO Supabase logging patch.
+## Link triển khai
 
-## 1. Supabase Setup
+Web dashboard:
 
-Open Supabase SQL Editor and run:
+```text
+https://vending-machine-cloud.vercel.app
+```
+
+Source code GitHub:
+
+```text
+https://github.com/QTS1806/vending-machine-cloud
+```
+
+## Mục đích của repository
+
+Repository này lưu các phần source code chính của hệ thống máy bán hàng tự động trong đồ án, bao gồm:
+
+- Firmware ESP32 điều khiển máy bán hàng.
+- Giao diện Web quản lý máy bán hàng.
+- Cấu trúc cơ sở dữ liệu Supabase.
+- Tài liệu tích hợp app Python YOLO nhận diện tiền.
+
+Không đưa toàn bộ source code vào báo cáo Word. Báo cáo chỉ trích các đoạn code quan trọng và dẫn link GitHub này tại phần phụ lục.
+
+## Cấu trúc thư mục
+
+```text
+vending-machine-cloud
+├─ firmware/
+│  └─ may_ban_hang_cloud/
+│     ├─ may_ban_hang_cloud.ino
+│     └─ secrets.example.h
+├─ supabase/
+│  ├─ schema.sql
+│  ├─ add_total_refunded.sql
+│  └─ fix_touch_trigger.sql
+├─ web/
+│  ├─ src/
+│  │  ├─ App.jsx
+│  │  ├─ main.jsx
+│  │  └─ styles.css
+│  ├─ package.json
+│  └─ vite.config.js
+├─ python/
+│  └─ README.md
+├─ README.md
+└─ vercel.json
+```
+
+## Các file quan trọng
+
+| File/Thư mục | Vai trò |
+| --- | --- |
+| `firmware/may_ban_hang_cloud/may_ban_hang_cloud.ino` | Firmware ESP32 điều khiển máy bán hàng, đọc cảm biến/nút bấm, điều khiển relay/motor và đồng bộ Supabase |
+| `firmware/may_ban_hang_cloud/secrets.example.h` | File mẫu cấu hình WiFi và Supabase cho ESP32 |
+| `supabase/schema.sql` | Tạo bảng dữ liệu, policy, index và dữ liệu mẫu cho Supabase |
+| `web/src/App.jsx` | Logic chính của Web dashboard |
+| `web/src/styles.css` | Giao diện và bố cục Web dashboard |
+| `web/package.json` | Danh sách thư viện và script chạy Web |
+| `python/README.md` | Ghi chú cách app Python YOLO giao tiếp với ESP32 |
+
+## Luồng hoạt động chính
+
+```mermaid
+flowchart LR
+  User["Người dùng"] --> Machine["Máy bán hàng"]
+  Camera["Camera"] --> Python["App Python YOLO"]
+  Python -->|"Serial: #HOPLE:<amount>"| ESP32["ESP32"]
+  ESP32 -->|"money_events, sales, machine_events"| Supabase["Supabase"]
+  Web["Web dashboard"] -->|"machine_commands"| Supabase
+  Supabase -->|"REST API"| ESP32
+  Supabase -->|"Dữ liệu quản lý"| Web
+```
+
+Mô tả ngắn:
+
+1. Người dùng đưa tiền vào máy.
+2. ESP32 gửi `#START` cho app Python.
+3. Python nhận diện tiền bằng YOLO và gửi `#HOPLE:<amount>` về ESP32 nếu hợp lệ.
+4. ESP32 xử lý số dư, bán hàng, hoàn tiền và điều khiển động cơ.
+5. ESP32 ghi dữ liệu lên Supabase.
+6. Web dashboard đọc dữ liệu Supabase và hiển thị doanh thu, tồn kho, lịch sử bán hàng, tiền và cảnh báo.
+7. Khi người quản trị sửa cấu hình trên Web, Web tạo lệnh trong `machine_commands`; ESP32 đọc lệnh và cập nhật cấu hình local.
+
+## Cơ sở dữ liệu Supabase
+
+Các bảng chính:
+
+| Bảng | Chức năng |
+| --- | --- |
+| `machines` | Thông tin máy, trạng thái online/offline, số dư, doanh thu, tiền đã nhận/trả lại |
+| `products` | Danh sách sản phẩm theo từng máy và từng slot |
+| `sales` | Lịch sử bán hàng |
+| `money_events` | Lịch sử tiền vào/tiền ra |
+| `machine_events` | Nhật ký máy và cảnh báo |
+| `machine_commands` | Lệnh cấu hình từ Web gửi xuống ESP32 |
+
+Chạy schema ban đầu trong Supabase SQL Editor:
 
 ```text
 supabase/schema.sql
 ```
 
-This creates:
+## Chạy Web ở máy local
 
-- `machines`
-- `products`
-- `sales`
-- `money_events`
-- `machine_events`
-- `machine_commands`
+Yêu cầu:
 
-It also creates demo machine `vending-001` with 4 product slots.
+- Node.js
+- npm
+- Supabase project
 
-## 2. Run Web Locally
+Tạo file:
+
+```text
+web/.env
+```
+
+Theo mẫu:
+
+```env
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_OR_PUBLISHABLE_KEY
+```
+
+Chạy Web:
 
 ```bash
-cd "C:\Users\Nguyen Van Quan\Documents\vending-machine-cloud\web"
+cd web
 npm install
 npm run dev
 ```
 
-Open:
+Mở:
 
 ```text
 http://127.0.0.1:5173
 ```
 
-The local `.env` is already filled for your current Supabase project.
+## Deploy Web lên Vercel
 
-## 3. Upload ESP32 Firmware
-
-Open:
-
-```text
-firmware/may_ban_hang_cloud.ino
-```
-
-Install Arduino libraries:
-
-- ArduinoJson
-- LiquidCrystal_I2C
-- ESP32 board package
-
-Upload to ESP32 and open Serial Monitor at `115200`.
-
-Expected logs:
-
-```text
-#WIFI:IP:...
-#OK:CLOUD_SP:...
-```
-
-When Python detects a bill, it still sends:
-
-```text
-#HOPLE:10000
-```
-
-ESP32 will accept the bill, update local credit, and insert a row into `money_events`.
-
-## 4. Test Web-to-ESP32 Config
-
-1. Open the dashboard.
-2. Change price or stock for `SP1`.
-3. Click `Lưu`.
-4. Wait up to 5 seconds.
-5. ESP32 Serial Monitor should show:
-
-```text
-#OK:CLOUD_SP:1,<price>,<stock>
-```
-
-The command row in web tab `Lệnh` should become `done`.
-
-## 5. Test Sale Flow
-
-1. Run Python YOLO app and connect COM.
-2. Insert a bill.
-3. ESP32 accepts money and Supabase gets a `money_events` row.
-4. Buy a product on keypad.
-5. Supabase gets a `sales` row.
-6. Web revenue, sold quantity, and stock update.
-
-## 6. Deploy Web to Vercel
-
-```bash
-cd "C:\Users\Nguyen Van Quan\Documents\vending-machine-cloud\web"
-npx vercel --prod
-```
-
-In Vercel project settings, set Production Environment Variables:
+Web được deploy bằng Vercel. Khi deploy cần cấu hình Environment Variables:
 
 ```env
-VITE_SUPABASE_URL=https://vjbmzmzdjsahyegnutne.supabase.co
-VITE_SUPABASE_ANON_KEY=sb_publishable_lGCGKWhEl7g1pqcZCknoSg_c9lcG_8_
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_OR_PUBLISHABLE_KEY
 ```
 
-## Adding More Machines
+Build kiểm tra:
 
-For each new ESP32:
+```bash
+cd web
+npm run build
+```
 
-1. Change this in firmware:
+## Nạp firmware ESP32
+
+Mở file:
+
+```text
+firmware/may_ban_hang_cloud/may_ban_hang_cloud.ino
+```
+
+Tạo file cấu hình riêng:
+
+```text
+firmware/may_ban_hang_cloud/secrets.h
+```
+
+Dựa trên mẫu:
+
+```text
+firmware/may_ban_hang_cloud/secrets.example.h
+```
+
+Ví dụ cấu trúc:
+
+```cpp
+const char *WIFI_SSID = "YOUR_WIFI_SSID";
+const char *WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char *SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co";
+const char *SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_OR_PUBLISHABLE_KEY";
+const char *MACHINE_ID = "vending-001";
+```
+
+Thư viện Arduino cần cài:
+
+- ESP32 board package
+- ArduinoJson
+- LiquidCrystal_I2C
+
+Serial Monitor:
+
+```text
+115200 baud
+```
+
+## Mở rộng thêm máy bán hàng
+
+Mỗi máy cần một `MACHINE_ID` riêng:
 
 ```cpp
 const char *MACHINE_ID = "vending-002";
 ```
 
-2. Upload to the new ESP32.
-3. Add `vending-002` from the web dashboard, or let ESP32 bootstrap it.
+Web và database tách dữ liệu theo `machine_id`, vì vậy có thể mở rộng thêm nhiều máy như:
 
-All data is separated by `machine_id`.
+```text
+vending-001
+vending-002
+vending-003
+```
 
-## Production Notes
+## Ghi chú bảo mật
 
-The demo schema allows anon read/write for fast testing. Before real deployment:
+Repository public không chứa:
 
-- Add admin login.
-- Do not allow public anon write to all tables.
-- Move ESP32 writes through Supabase Edge Functions or signed device tokens.
-- Avoid putting WiFi passwords and long-term keys directly in firmware for machines outside your lab.
+- `web/.env`
+- `firmware/may_ban_hang_cloud/secrets.h`
+- WiFi password thật
+- Supabase key thật
+
+Các file cấu hình thật chỉ nên lưu ở máy cá nhân hoặc trong Environment Variables của Vercel.
+
+## Phạm vi đồ án
+
+Repository phục vụ mục đích học tập và báo cáo đồ án. Hệ thống hiện ở mức mô hình thử nghiệm, tập trung kiểm chứng:
+
+- Điều khiển máy bán hàng bằng ESP32.
+- Nhận diện tiền bằng YOLO qua app Python.
+- Ghi nhận dữ liệu lên Supabase.
+- Quản lý máy bán hàng qua Web dashboard.
+- Deploy Web bằng Vercel.
+
+Nếu triển khai thực tế, cần bổ sung đăng nhập, phân quyền, bảo mật API và cơ chế xác thực thiết bị.
 

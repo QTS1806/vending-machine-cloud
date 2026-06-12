@@ -21,8 +21,8 @@ Add near the imports in `vending_money_camera_fixed.py`:
 ```python
 from supabase import create_client
 
-SUPABASE_URL = "https://vjbmzmzdjsahyegnutne.supabase.co"
-SUPABASE_KEY = "sb_publishable_lGCGKWhEl7g1pqcZCknoSg_c9lcG_8_"
+SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
+SUPABASE_KEY = "YOUR_SUPABASE_ANON_OR_PUBLISHABLE_KEY"
 MACHINE_ID = "vending-001"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 ```
@@ -54,4 +54,3 @@ except Exception as exc:
 ```
 
 Do not let Python send money directly to `money_events` unless you want to count bills before ESP32 confirms the conveyor accepted them.
-
