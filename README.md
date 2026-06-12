@@ -72,6 +72,232 @@ vending-machine-cloud
 | `web/package.json` | Danh sách thư viện và script chạy Web |
 | `python/README.md` | Ghi chú cách app Python YOLO giao tiếp với ESP32 |
 
+## Các đoạn code quan trọng
+
+Phần này trích một số đoạn code đại diện cho các chức năng cốt lõi của hệ thống. Các đoạn code đầy đủ nằm trong từng file tương ứng của repository.
+
+### 1. ESP32 nhận kết quả tiền hợp lệ từ app Python
+
+File:
+
+```text
+firmware/may_ban_hang_cloud/may_ban_hang_cloud.ino
+```
+
+Khi app Python nhận diện được tiền, app gửi chuỗi `#HOPLE:<amount>` qua Serial. ESP32 đọc chuỗi này và lưu số tiền tạm thời vào biến `tienMoiNhan`.
+
+```cpp
+if (data.startsWith("#HOPLE:"))
+{
+  tienMoiNhan = data.substring(7).toInt();
+
+  Serial.print("Nhan tien: ");
+  Serial.println(tienMoiNhan);
+  return;
+}
+```
+
+### 2. ESP32 gửi tín hiệu bắt đầu/kết thúc nhận tiền cho Python
+
+Khi cảm biến đầu phát hiện tiền đi vào, ESP32 gửi `#START` để app Python bắt đầu nhận diện. Khi tiền đi tới cảm biến cuối, ESP32 gửi `#END` để báo quá trình nhận tiền đã kết thúc.
+
+```cpp
+tienMoiNhan = 0;
+Serial.println("#START");
+chayBangTaiTienVao();
+doiTrangThaiTien(TIEN_DANG_DI, now);
+```
+
+```cpp
+if (tienDenCuoi)
+{
+  Serial.println("#END");
+
+  if (tienMoiNhan > 0)
+  {
+    doiTrangThaiTien(TIEN_DI_THEM, now);
+  }
+  else
+  {
+    chayBangTaiTienRa();
+    doiTrangThaiTien(TIEN_DANG_LUI, now);
+  }
+}
+```
+
+### 3. ESP32 cộng tiền hợp lệ và đưa dữ liệu vào hàng chờ gửi Cloud
+
+Sau khi tiền đi qua cảm biến cuối và đã được Python xác nhận hợp lệ, ESP32 cộng tiền vào số dư hiện tại, sau đó gọi `cloudMoneyAccepted()` để đưa sự kiện tiền vào hàng chờ gửi lên Supabase.
+
+```cpp
+dungBangTaiTien();
+tienDangCo += tienMoiNhan;
+cloudMoneyAccepted(tienMoiNhan);
+tienMoiNhan = 0;
+doiTrangThaiTien(TIEN_CHO, now);
+showHome();
+```
+
+### 4. ESP32 xử lý bán hàng, trừ tiền và giảm tồn kho
+
+Khi bán hàng thành công hoặc khi động cơ quay quá lâu theo yêu cầu hiện tại, ESP32 trừ tiền sản phẩm, giảm tồn kho và đưa dữ liệu bán hàng vào hàng chờ gửi lên Supabase.
+
+```cpp
+void ghiNhanBanHangDaTruTien(int sp, const String &saleMessage)
+{
+  long giaDaBan = giaSP[sp];
+  long tienTruocKhiBan = tienDangCo;
+
+  tienDangCo -= giaDaBan;
+  if (tienDangCo < 0)
+  {
+    tienDangCo = 0;
+  }
+
+  if (soLuongSP[sp] > 0)
+  {
+    soLuongSP[sp]--;
+  }
+
+  cloudSaleSuccess(sp, giaDaBan, tienTruocKhiBan, tienDangCo, saleMessage);
+}
+```
+
+### 5. ESP32 đọc lệnh cấu hình từ Web
+
+ESP32 định kỳ đọc bảng `machine_commands` để lấy các lệnh còn trạng thái `pending` theo đúng `MACHINE_ID`. Sau khi áp dụng lệnh, ESP32 đánh dấu lệnh là `done` hoặc `failed`.
+
+```cpp
+String path = String("machine_commands?select=id,command_type,payload")
+              + "&machine_id=eq." + MACHINE_ID
+              + "&status=eq.pending"
+              + "&order=created_at.asc"
+              + "&limit=1";
+
+if (!cloudRequest("GET", path, "", &response))
+{
+  return;
+}
+```
+
+```cpp
+bool ok = cloudApplyCommand(String(type), payload);
+cloudMarkCommand(id, ok, ok ? "" : "apply failed");
+```
+
+### 6. Web kết nối Supabase
+
+File:
+
+```text
+web/src/App.jsx
+```
+
+Web sử dụng thư viện `@supabase/supabase-js`. URL và key được lấy từ biến môi trường Vercel hoặc file `.env` khi chạy local.
+
+```jsx
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const supabase = isConfigured ? createClient(supabaseUrl, supabaseAnonKey) : null;
+```
+
+### 7. Web tạo lệnh gửi xuống ESP32
+
+Khi người quản trị sửa giá hoặc số lượng sản phẩm trên Web, Web tạo một bản ghi mới trong bảng `machine_commands`. ESP32 sẽ đọc và áp dụng lệnh này trong Cloud Task.
+
+```jsx
+const createCommand = async (commandType, payload) => {
+  const { error: commandError } = await supabase.from("machine_commands").insert({
+    machine_id: machineId,
+    command_type: commandType,
+    payload,
+  });
+
+  if (commandError) {
+    throw commandError;
+  }
+};
+```
+
+Ví dụ gửi lệnh cập nhật một sản phẩm:
+
+```jsx
+await createCommand("set_product", {
+  slot: Number(product.slot),
+  name: displayProductName(product),
+  price: Number(product.price),
+  stock: Number(product.stock),
+  enabled: Boolean(product.enabled),
+});
+```
+
+### 8. Web lắng nghe thay đổi dữ liệu từ Supabase
+
+Web sử dụng realtime channel để cập nhật lại giao diện khi có dữ liệu bán hàng, tiền, cảnh báo hoặc lệnh cấu hình mới.
+
+```jsx
+const channel = supabase
+  .channel("vending-dashboard")
+  .on(
+    "postgres_changes",
+    { event: "INSERT", schema: "public", table: "sales" },
+    loadData,
+  )
+  .on(
+    "postgres_changes",
+    { event: "INSERT", schema: "public", table: "money_events" },
+    loadData,
+  )
+  .on(
+    "postgres_changes",
+    { event: "*", schema: "public", table: "machine_commands" },
+    loadData,
+  )
+  .subscribe();
+```
+
+### 9. Cấu trúc bảng chính trong Supabase
+
+File:
+
+```text
+supabase/schema.sql
+```
+
+Ví dụ bảng `machines` lưu trạng thái và thống kê của từng máy:
+
+```sql
+create table if not exists public.machines (
+  id text primary key,
+  name text not null,
+  location text,
+  status text not null default 'offline',
+  firmware_version text,
+  current_credit integer not null default 0,
+  cash_in_box integer not null default 0,
+  total_sales integer not null default 0,
+  total_revenue integer not null default 0,
+  total_refunded integer not null default 0,
+  last_seen_at timestamptz
+);
+```
+
+Bảng `machine_commands` dùng để Web gửi lệnh cấu hình xuống ESP32:
+
+```sql
+create table if not exists public.machine_commands (
+  id bigint generated by default as identity primary key,
+  machine_id text not null references public.machines(id) on delete cascade,
+  command_type text not null,
+  payload jsonb not null default '{}'::jsonb,
+  status text not null default 'pending',
+  error_message text,
+  created_at timestamptz not null default now(),
+  processed_at timestamptz
+);
+```
+
 ## Luồng hoạt động chính
 
 ```mermaid
