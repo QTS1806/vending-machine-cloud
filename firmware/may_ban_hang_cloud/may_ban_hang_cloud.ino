@@ -48,14 +48,14 @@ const int relaySP[5] = {0, RL1, RL2, RL3, RL4};
 const int camBienMotorSP[5] = {0, IR_MOTOR_DUOI, IR_MOTOR_DUOI, IR_MOTOR_TREN, IR_MOTOR_TREN};
 
 long giaSP[5] = {0, 10000, 10000, 10000, 10000};
-int soLuongSP[5] = {0, 4, 4, 4, 4};
+int soLuongSP[5] = {0, 3, 3, 3, 3};
 bool sanPhamBat[5] = {false, true, true, true, true};
 
 const long GIA_MIN = 5000;
 const long GIA_MAX = 500000;
 const long GIOI_HAN_TIEN = 1000000;
 const int SO_LUONG_MIN = 0;
-const int SO_LUONG_MAX = 4;
+const int SO_LUONG_MAX = 3;
 
 const unsigned long THOI_GIAN_DI_THEM_TIEN = 3000;
 const unsigned long THOI_GIAN_LUI_THEM_TIEN = 3000;

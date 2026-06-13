@@ -26,7 +26,7 @@ create table if not exists public.products (
   name text not null,
   price integer not null default 10000,
   stock integer not null default 0,
-  capacity integer not null default 4,
+  capacity integer not null default 3,
   enabled boolean not null default true,
   updated_at timestamptz not null default now(),
   unique (machine_id, slot),
@@ -155,10 +155,10 @@ set name = excluded.name,
 
 insert into public.products (machine_id, slot, name, price, stock, capacity, enabled)
 values
-  ('vending-001', 1, 'Sản phẩm 1', 10000, 4, 4, true),
-  ('vending-001', 2, 'Sản phẩm 2', 10000, 4, 4, true),
-  ('vending-001', 3, 'Sản phẩm 3', 10000, 4, 4, true),
-  ('vending-001', 4, 'Sản phẩm 4', 10000, 4, 4, true)
+  ('vending-001', 1, 'Sản phẩm 1', 10000, 3, 3, true),
+  ('vending-001', 2, 'Sản phẩm 2', 10000, 3, 3, true),
+  ('vending-001', 3, 'Sản phẩm 3', 10000, 3, 3, true),
+  ('vending-001', 4, 'Sản phẩm 4', 10000, 3, 3, true)
 on conflict (machine_id, slot) do update
 set name = excluded.name,
     price = excluded.price,

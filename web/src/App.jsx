@@ -32,6 +32,21 @@ const supabase = isConfigured ? createClient(supabaseUrl, supabaseAnonKey) : nul
 const DEFAULT_MACHINE_ID = "vending-001";
 const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
 const DISMISSED_ALERTS_KEY = "vending-dismissed-alerts";
+const MAX_PRODUCT_STOCK = 3;
+
+function clampProductStock(value) {
+  const number = Number(value || 0);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.min(MAX_PRODUCT_STOCK, Math.trunc(number)));
+}
+
+function normalizeProduct(product) {
+  return {
+    ...product,
+    stock: clampProductStock(product?.stock),
+    capacity: MAX_PRODUCT_STOCK,
+  };
+}
 
 function money(value) {
   return `${Number(value || 0).toLocaleString("vi-VN")} đ`;
@@ -113,8 +128,8 @@ function productStatusLabel(product) {
 }
 
 function percent(stock, capacity) {
-  const max = Math.max(1, Number(capacity || 0));
-  return Math.max(0, Math.min(100, (Number(stock || 0) / max) * 100));
+  const max = Math.max(1, Math.min(MAX_PRODUCT_STOCK, Number(capacity || MAX_PRODUCT_STOCK)));
+  return Math.max(0, Math.min(100, (clampProductStock(stock) / max) * 100));
 }
 
 function machineNumber(id) {
@@ -379,8 +394,8 @@ export default function App() {
     if (firstError) {
       setError(firstError.message);
     } else {
-      setProducts(productResult.data || []);
-      setAllProducts(allProductResult.data || []);
+      setProducts((productResult.data || []).map(normalizeProduct));
+      setAllProducts((allProductResult.data || []).map(normalizeProduct));
       setSales(salesResult.data || []);
       setMoneyEvents(moneyResult.data || []);
       setCommands(commandResult.data || []);
@@ -513,8 +528,8 @@ export default function App() {
     setNotice("");
 
     const price = Number(product.price);
-    const stock = Number(product.stock);
-    const capacity = Math.max(Number(product.capacity || 0), stock);
+    const stock = clampProductStock(product.stock);
+    const capacity = MAX_PRODUCT_STOCK;
 
     if (!Number.isInteger(price) || price < 0 || price % 1000 !== 0) {
       setError(`SP${product.slot}: giá không hợp lệ`);
@@ -522,7 +537,7 @@ export default function App() {
       return;
     }
 
-    if (!Number.isInteger(stock) || stock < 0) {
+    if (!Number.isInteger(Number(product.stock)) || Number(product.stock) < 0 || Number(product.stock) > MAX_PRODUCT_STOCK) {
       setError(`SP${product.slot}: tồn kho không hợp lệ`);
       setSaving("");
       return;
@@ -569,8 +584,8 @@ export default function App() {
           slot: Number(product.slot),
           name: displayProductName(product),
           price: Number(product.price),
-          stock: Number(product.stock),
-          capacity: Number(product.capacity),
+          stock: clampProductStock(product.stock),
+          capacity: MAX_PRODUCT_STOCK,
           enabled: Boolean(product.enabled),
         };
 
@@ -588,8 +603,8 @@ export default function App() {
           slot: Number(item.slot),
           name: displayProductName(item),
           price: Number(item.price),
-          stock: Number(item.stock),
-          capacity: Number(item.capacity),
+          stock: clampProductStock(item.stock),
+          capacity: MAX_PRODUCT_STOCK,
           enabled: Boolean(item.enabled),
         })),
       });
@@ -644,8 +659,8 @@ export default function App() {
       slot,
       name: `Sản phẩm ${slot}`,
       price: 10000,
-      stock: 4,
-      capacity: 4,
+      stock: MAX_PRODUCT_STOCK,
+      capacity: MAX_PRODUCT_STOCK,
       enabled: true,
     }));
 
@@ -1171,7 +1186,7 @@ function ProductsPage({ currentMachine, machineId, machines, products, setMachin
                 </label>
                 <label>
                   Số lượng còn
-                  <input type="number" min="0" value={product.stock} onChange={(event) => updateProductField(product.slot, "stock", event.target.value)} />
+                  <input type="number" min="0" max={MAX_PRODUCT_STOCK} value={product.stock} onChange={(event) => updateProductField(product.slot, "stock", event.target.value)} />
                 </label>
               </div>
 
