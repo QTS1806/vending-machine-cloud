@@ -49,7 +49,7 @@ function normalizeProduct(product) {
 }
 
 function money(value) {
-  return `${Number(value || 0).toLocaleString("vi-VN")} đ`;
+  return `${Number(value || 0).toLocaleString("vi-VN")} \u0111`;
 }
 
 function time(value) {
@@ -89,13 +89,13 @@ function isToday(value) {
 }
 
 function ageText(value) {
-  if (!value) return "Chưa có tín hiệu";
+  if (!value) return "Ch\u01b0a c\u00f3 t\u00edn hi\u1ec7u";
   const diffSeconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
-  if (diffSeconds < 60) return `${diffSeconds}s trước`;
+  if (diffSeconds < 60) return `${diffSeconds}s tr\u01b0\u1edbc`;
   const diffMinutes = Math.floor(diffSeconds / 60);
-  if (diffMinutes < 60) return `${diffMinutes} phút trước`;
+  if (diffMinutes < 60) return `${diffMinutes} ph\u00fat tr\u01b0\u1edbc`;
   const diffHours = Math.floor(diffMinutes / 60);
-  return `${diffHours} giờ trước`;
+  return `${diffHours} gi\u1edd tr\u01b0\u1edbc`;
 }
 
 function machineTone(machine) {
@@ -108,9 +108,9 @@ function machineTone(machine) {
 
 function machineStatusLabel(machine) {
   const tone = machineTone(machine);
-  if (tone === "success") return "Hoạt động";
-  if (machine?.status === "error") return "Lỗi";
-  return "Ngoại tuyến";
+  if (tone === "success") return "Ho\u1ea1t \u0111\u1ed9ng";
+  if (machine?.status === "error") return "L\u1ed7i";
+  return "Ngo\u1ea1i tuy\u1ebfn";
 }
 
 function productTone(product) {
@@ -121,10 +121,10 @@ function productTone(product) {
 }
 
 function productStatusLabel(product) {
-  if (!product.enabled) return "Đang tắt";
-  if (Number(product.stock) <= 0) return "Hết hàng";
-  if (Number(product.stock) <= 1) return "Sắp hết";
-  return "Còn hàng";
+  if (!product.enabled) return "\u0110ang t\u1eaft";
+  if (Number(product.stock) <= 0) return "H\u1ebft h\u00e0ng";
+  if (Number(product.stock) <= 1) return "S\u1eafp h\u1ebft";
+  return "C\u00f2n h\u00e0ng";
 }
 
 function percent(stock, capacity) {
@@ -139,7 +139,7 @@ function machineNumber(id) {
 
 function displayMachineName(machineOrId) {
   const id = typeof machineOrId === "string" ? machineOrId : machineOrId?.id;
-  return `Máy bán hàng ${machineNumber(id)}`;
+  return `M\u00e1y b\u00e1n h\u00e0ng ${machineNumber(id)}`;
 }
 
 function displayMachineWithId(machineOrId) {
@@ -148,15 +148,24 @@ function displayMachineWithId(machineOrId) {
   return `${displayMachineName(machineOrId)} (${id})`;
 }
 
+function looksMojibake(value) {
+  const text = String(value || "");
+  return /[\u00c2\u00c3\u00c4\u00c6\u0192]|\u00e1[\u00ba\u00bb]|Ã|Â|Ä|Æ|ƒ/.test(text);
+}
+
 function displayProductName(product) {
   const name = String(product?.name || "").trim();
-  if (!name) return `Sản phẩm ${product?.slot || ""}`.trim();
-  return name.replace(/^san\s*pham/i, "Sản phẩm");
+  const fallback = `S\u1ea3n ph\u1ea9m ${product?.slot || ""}`.trim();
+  if (!name || looksMojibake(name)) return fallback;
+  return name.replace(/^san\s*pham/i, "S\u1ea3n ph\u1ea9m");
 }
 
 function displayOfflineMessage(event, machineName) {
-  const message = event?.message || `Không tìm thấy tín hiệu từ ${machineName}.`;
-  return message.replace(" trong ", " từ ");
+  if (looksMojibake(event?.message)) {
+    return `Kh\u00f4ng t\u00ecm th\u1ea5y t\u00edn hi\u1ec7u t\u1eeb ${machineName}.`;
+  }
+  const message = event?.message || `Kh\u00f4ng t\u00ecm th\u1ea5y t\u00edn hi\u1ec7u t\u1eeb ${machineName}.`;
+  return message.replace(" trong ", " t\u1eeb ");
 }
 
 function displayEventMessage(event, machineName) {
