@@ -159,6 +159,18 @@ function displayOfflineMessage(event, machineName) {
   return message.replace(" trong ", " từ ");
 }
 
+function displayEventMessage(event, machineName) {
+  if (!event) return "-";
+  if (event.event_type === "offline_detected") {
+    return displayOfflineMessage(event, machineName);
+  }
+  if (event.event_type === "motor_timeout") {
+    const slotText = event.slot ? ` tại SP${event.slot}` : "";
+    return `Động cơ quay quá lâu${slotText}.`;
+  }
+  return event.message || event.event_type || "-";
+}
+
 function Pill({ tone, children }) {
   return <span className={`pill pill-${tone}`}>{children}</span>;
 }
@@ -266,7 +278,7 @@ export default function App() {
         text:
           event.event_type === "offline_detected"
             ? displayOfflineMessage(event, eventMachineName)
-            : event.message || time(event.created_at),
+            : displayEventMessage(event, eventMachineName) || time(event.created_at),
       });
     }
 
@@ -299,7 +311,7 @@ export default function App() {
         id: `event-${event.id}`,
         icon: event.severity === "error" || event.severity === "warning" ? AlertCircle : ListChecks,
         tone: event.severity === "error" ? "danger" : event.severity === "warning" ? "warning" : "neutral",
-        title: `${displayMachineName(event.machine_id || currentMachine)}: ${event.message || event.event_type}`,
+        title: `${displayMachineName(event.machine_id || currentMachine)}: ${displayEventMessage(event, displayMachineWithId(event.machine_id || currentMachine))}`,
         text: time(event.created_at),
         created_at: event.created_at,
       })),
