@@ -161,14 +161,27 @@ function displayOfflineMessage(event, machineName) {
 
 function displayEventMessage(event, machineName) {
   if (!event) return "-";
-  if (event.event_type === "offline_detected") {
-    return displayOfflineMessage(event, machineName);
+  const slotText = event.slot ? ` t\u1ea1i SP${event.slot}` : "";
+  const amount = Number(event.amount ?? event.payload?.amount ?? 0);
+
+  switch (event.event_type) {
+    case "offline_detected":
+      return displayOfflineMessage(event, machineName);
+    case "machine_online":
+      return "M\u00e1y \u0111\u00e3 b\u1eadt v\u00e0 k\u1ebft n\u1ed1i cloud.";
+    case "motor_timeout":
+      return `\u0110\u1ed9ng c\u01a1 quay qu\u00e1 l\u00e2u${slotText}.`;
+    case "out_of_stock":
+      return `S\u1ea3n ph\u1ea9m${slotText} \u0111\u00e3 h\u1ebft h\u00e0ng.`;
+    case "refund":
+      return amount > 0 ? `Ho\u00e0n tr\u1ea3 ${money(amount)} cho kh\u00e1ch.` : "Ho\u00e0n tr\u1ea3 ti\u1ec1n cho kh\u00e1ch.";
+    case "money_accepted":
+      return amount > 0 ? `Nh\u1eadn ${money(amount)}.` : "Nh\u1eadn ti\u1ec1n.";
+    case "sale_success":
+      return `B\u00e1n h\u00e0ng th\u00e0nh c\u00f4ng${slotText}.`;
+    default:
+      return event.message || event.event_type || "-";
   }
-  if (event.event_type === "motor_timeout") {
-    const slotText = event.slot ? ` tại SP${event.slot}` : "";
-    return `Động cơ quay quá lâu${slotText}.`;
-  }
-  return event.message || event.event_type || "-";
 }
 
 function Pill({ tone, children }) {
@@ -1287,7 +1300,7 @@ function AlertsPage({ alerts, events, currentMachine, onDismissAlert }) {
           ["machine_id", "Máy", (row) => displayMachineWithId(row.machine_id || currentMachine)],
           ["event_type", "Loại", (row) => row.event_type],
           ["severity", "Mức", (row) => <Pill tone={row.severity === "error" ? "danger" : row.severity === "warning" ? "warning" : "neutral"}>{row.severity}</Pill>],
-          ["message", "Nội dung", (row) => (row.event_type === "offline_detected" ? displayOfflineMessage(row, displayMachineWithId(row.machine_id || currentMachine)) : row.message || "-")],
+          ["message", "N\u1ed9i dung", (row) => displayEventMessage(row, displayMachineWithId(row.machine_id || currentMachine))],
         ]}
       />
     </section>
